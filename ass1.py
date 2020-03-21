@@ -1,25 +1,32 @@
 # part 1
 # Implement the following functions, which are used to carry out the forward propagation process:
 
+
 def initialize_parameters(layer_dims):
     """
-    input: an array of the dimensions of each layer in the network (layer 0 is the size of the flattened input,
-    layer L is the output softmax)  output: a dictionary containing the initialized W and b parameters of each layer
-    (W1…WL, b1…bL).  Hint: Use the randn and zeros functions of numpy to initialize W and b, respectively  :param
-    layer_dims: :return:
+    input:
+    an array of the dimensions of each layer in the network (layer 0 is the size of the flattened input,
+    layer L is the output softmax)
+
+    output:
+    a dictionary containing the initialized W and b parameters of each layer
+    (W1…WL, b1…bL).  Hint: Use the randn and zeros functions of numpy to initialize W and b, respectively
     """
     pass
 
 def linear_forward(A, W, b):
     """
-    Description: Implement the linear part of a layer's forward propagation.  
+    Description:
+    Implement the linear part of a layer's forward propagation.  
+
     input:
     A – the activations of the previous layer 
     W – the weight matrix of the current layer (of shape [size of current layer, size of previous layer])
-    B – the bias vector of the current layer (of shape [size of current layer, 1])  
+    B – the bias vector of the current layer (of shape [size of current layer, 1])
+
     Output:
     Z – the linear component of the activation function (i.e., the value before applying the non-linear function) 
-    linear_cache – a dictionary containing A, W, b (stored for making the backpropagation easier to compute) 
+    linear_cache – a dictionary containing A, W, b (stored for making the backpropagation easier to compute)
     """
     pass
 
