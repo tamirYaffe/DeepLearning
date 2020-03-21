@@ -1,79 +1,80 @@
 import numpy as np
 
+
 # part 1
 # Implement the following functions, which are used to carry out the forward propagation process:
 
 
 def initialize_parameters(layer_dims):
-    layer_params = [None]
+    """
+    :param layer_dims: an array of the dimensions of each layer in the network (layer 0 is the size of the flattened input, layer L is the output softmax) 
+    :return: a dictionary containing the initialized W and b parameters of each layer (W1…WL, b1…bL). 
+    """
+    parameters = [None]
     for layer in range(1, len(layer_dims)):
-        w = np.random.rand(layer_dims[layer], layer_dims[layer-1]) + 0.5  # values 0.5 - 1.5
+        W = np.random.rand(layer_dims[layer], layer_dims[layer - 1]) + 0.5  # values 0.5 - 1.5
         b = np.zeros(layer_dims[layer])
-        layer_dict = {'w': w, 'b': b}
-        layer_params.append(layer_dict)
-    return layer_params
+        layer_dict = {'W': W, 'b': b}
+        parameters.append(layer_dict)
+    return parameters
 
 
-def linear_forward(A, W, b):
+def linear_forward(A, W, B):
     """
-    Description:
-    Implement the linear part of a layer's forward propagation.  
-
-    input:
-    A – the activations of the previous layer 
-    W – the weight matrix of the current layer (of shape [size of current layer, size of previous layer])
-    B – the bias vector of the current layer (of shape [size of current layer, 1])
-
-    Output:
-    Z – the linear component of the activation function (i.e., the value before applying the non-linear function) 
-    linear_cache – a dictionary containing A, W, b (stored for making the backpropagation easier to compute)
+    Implement the linear part of a layer's forward propagation.
+    :param A: the activations of the previous layer.
+    :param W: the weight matrix of the current layer (of shape [size of current layer, size of previous layer]).
+    :param B: the bias vector of the current layer (of shape [size of current layer, 1]).
+    :return:
+     Z – the linear component of the activation function (i.e., the value before applying the non-linear function)
+     linear_cache – a dictionary containing A, W, b (stored for making the backpropagation easier to compute) 
     """
-    pass
+    Z = W * A + B
+    linear_cache = {'A': A, 'W': W, 'B': B}
+    return Z, linear_cache
 
 
 def softmax(Z):
     """
-    Input:
-    Z – the linear component of the activation function
-
-    Output:
-    A – the activations of the layer
-    activation_cache – returns Z, which will be useful for the backpropagation
-
-    note:
-    Softmax can be thought of as a sigmoid for multi-class problems. The formula for softmax for each node in the output layer is as follows:
+    :param Z: the linear component of the activation function
+    :return: A – the activations of the layer, activation_cache – returns Z, which will be useful for the backpropagation
     """
-    pass
+    exp = np.exp(Z - np.max(Z))
+    A = exp / exp.sum(axis=0)
+    activation_cache = Z
+    return A, activation_cache
 
 
 def relu(Z):
     """
-    Input:
-    Z – the linear component of the activation function
-
-    Output:
-    A – the activations of the layer
-    activation_cache – returns Z, which will be useful for the backpropagation
+    :param Z: the linear component of the activation function
+    :return: A – the activations of the layer, activation_cache – returns Z, which will be useful for the backpropagation
     """
-    pass
+    A = np.maximum(Z, 0)
+    activation_cache = Z
+    return A, activation_cache
 
 
 def linear_activation_forward(A_prev, W, B, activation):
     """
-    Description:
     Implement the forward propagation for the LINEAR->ACTIVATION layer
-
-    Input:
-    A_prev – activations of the previous layer
-    W – the weights matrix of the current layer
-    B – the bias vector of the current layer
-    Activation – the activation function to be used (a string, either “softmax” or “relu”)
-
-    Output:
-    A – the activations of the current layer
-    cache – a joint dictionary containing both linear_cache and activation_cache 
+    :param A_prev: activations of the previous layer.
+    :param W: the weights matrix of the current layer.
+    :param B: the bias vector of the current layer.
+    :param activation: the activation function to be used (a string, either “softmax” or “relu”).
+    :return:
+    A – the activations of the current layer.
+    cache – a joint dictionary containing both linear_cache and activation_cache.
     """
-    pass
+    Z, linear_cache = linear_forward(A_prev, W, B)
+    if activation is "softmax":
+        A, activation_cache = softmax(Z)
+    elif activation is "relu":
+        A, activation_cache = relu(Z)
+    else:
+        raise Exception("activation should be either softmax or relu")
+    cache = {'linear_cache': linear_cache, 'activation_cache': activation_cache}
+    return A, cache
 
 
 def L_model_forward(X, parameters, use_batchnorm):
@@ -268,6 +269,6 @@ def Predict(X, Y, parameters):
 
 
 # Tests
-layer_dims_test = [3,4,1]
+layer_dims_test = [3, 4, 1]
 d = initialize_parameters(layer_dims_test)
 print("done")
