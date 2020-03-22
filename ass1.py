@@ -42,9 +42,11 @@ def softmax(Z):
     :param Z: the linear component of the activation function
     :return: A – the activations of the layer, activation_cache – returns Z, which will be useful for the backpropagation
     """
-
-    exp = np.exp(Z - np.max(Z))
-    A = exp / exp.sum(axis=0)
+    # second version to compute softmax
+    # exp = np.exp(Z - np.max(Z))
+    # A = exp / exp.sum(axis=0)
+    exp_scores = np.exp(Z)
+    A = exp_scores / np.sum(exp_scores, axis=1, keepdims=True)
     activation_cache = Z
     return A, activation_cache
 
@@ -129,20 +131,39 @@ def compute_cost(AL, Y):
     Output: 
     cost – the cross-entropy cost
     """
-    pass
+    # corect_logprobs = -np.log(AL[range(num_examples), y])
+    # data_loss = np.sum(corect_logprobs)
+    # return 1./num_examples * data_loss
+
+    # Compute cross-entropy loss
+    # logprobs = np.zeros([len(AL[0]), 1])
+    # for r in range(len(AL[0])):  # For each element in the batch
+    #     for c in range(len(Y[r, :])):  # For each class
+    #         if Y[r, c] != 0:  # Positive classes
+    #             logprobs[r] += -np.log(AL[r, c]) * Y[r, c]  # We sum the loss per class for each element of the batch
+    # data_loss = np.sum(logprobs) / len(AL[0])
+
+    data_loss = 0
+    m = len(AL[0])
+    for r in range(m):  # For each element in the batch
+        for c in range(len(Y[r, :])):  # For each class
+            if Y[r, c] != 0:  # Positive classes
+                data_loss += -np.log(AL[r, c]) * Y[r, c]  # We sum the loss per class for each element of the batch
+    data_loss = -1 / m * data_loss
+    return data_loss
 
 
 def apply_batchnorm(A):
     """
-    Description: performs batchnorm on the received activation values of a given layer. 
-     
-    Input: 
-    A - the activation values of a given layer  
-
-    output: 
-    NA - the normalized activation values, based on the formula learned in class 
+    performs batchnorm on the received activation values of a given layer.
+    :param A: the activation values of a given layer.
+    :return: the normalized activation values, based on the formula learned in class.
     """
-    return A
+    mean = np.mean(A, axis=0)
+    variance = np.mean((A - mean) ** 2, axis=0)
+    float_epsilon = np.finfo(float).eps
+    NA = (A - mean) * 1.0 / np.sqrt(variance + float_epsilon)
+    return NA
 
 
 # part 2
@@ -298,7 +319,14 @@ def Predict(X, Y, parameters):
 # d = initialize_parameters(layer_dims_test)
 # a = np.array([[1,2], [3,4]])
 # a = a.flatten()
-x = np.ones((3,1)) + 0.5
-w = np.ones((4,3)) + 1
-z = np.matmul(w,x)
+# x = np.ones((3,1)) + 0.5
+# w = np.ones((4,3)) + 1
+# z = np.matmul(w,x)
+# AL = np.array([[0, 0], [0, 0], [0, 0]])
+# Y = np.array([[1, 0], [0, 1], [0, 0]])
+# cost = compute_cost(AL, Y)
+# print(cost)
+# a = np.random.rand(3,2)
+a = np.array([[1,2], [3,4]])
+na = apply_batchnorm(a)
 print("done")
