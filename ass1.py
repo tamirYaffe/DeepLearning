@@ -23,6 +23,7 @@ def initialize_parameters(layer_dims):
 def linear_forward(A, W, B):
     """
     Implement the linear part of a layer's forward propagation.
+
     :param A: the activations of the previous layer.
     :param W: the weight matrix of the current layer (of shape [size of current layer, size of previous layer]).
     :param B: the bias vector of the current layer (of shape [size of current layer, 1]).
@@ -65,7 +66,8 @@ def relu(Z):
 
 def linear_activation_forward(A_prev, W, B, activation):
     """
-    Implement the forward propagation for the LINEAR->ACTIVATION layer
+    Implement the forward propagation for the LINEAR->ACTIVATION layer.
+
     :param A_prev: activations of the previous layer.
     :param W: the weights matrix of the current layer.
     :param B: the bias vector of the current layer.
@@ -89,6 +91,7 @@ def linear_activation_forward(A_prev, W, B, activation):
 def L_model_forward(X, parameters, use_batchnorm):
     """
     Implement forward propagation for the [LINEAR->RELU]*(L-1)->LINEAR->SOFTMAX computation.
+
     :param X: the data, numpy array of shape (input size, number of examples).
     :param parameters: the initialized W and b parameters of each layer.
     :param use_batchnorm: a boolean flag used to determine whether to apply batchnorm after the activation.
@@ -121,6 +124,7 @@ def L_model_forward(X, parameters, use_batchnorm):
 def compute_cost(AL, Y):
     """
     Implement the cost function defined by equation. The requested cost function is categorical cross-entropy loss.
+
     :param AL: probability vector corresponding to your label predictions, shape (num_of_classes, number of examples).
     :param Y: the labels vector (i.e. the ground truth).
     :return: the cross-entropy cost
@@ -139,6 +143,7 @@ def compute_cost(AL, Y):
 def apply_batchnorm(A):
     """
     performs batchnorm on the received activation values of a given layer.
+
     :param A: the activation values of a given layer.
     :return: the normalized activation values, based on the formula learned in class.
     """
@@ -156,6 +161,7 @@ def apply_batchnorm(A):
 def Linear_backward(dZ, cache):
     """
     Implements the linear part of the backward propagation process for a single layer.
+
     :param dZ: the gradient of the cost with respect to the linear output of the current layer (layer l).
     :param cache: tuple of values (A_prev, W, b) coming from the forward propagation in the current layer.
     :return:
@@ -170,56 +176,60 @@ def Linear_backward(dZ, cache):
     return dA_prev, dW, db
 
 
-def linear_activation_backward(dA, cache, activation):
+def linear_activation_backward(dA, cache):
     """
     Implements the backward propagation for the LINEAR->ACTIVATION layer. The function first computes dZ and then applies the linear_backward function.
+
     :param dA: post activation gradient of the current layer.
     :param cache: contains both the linear cache and the activations cache.
-    :param activation: the activation function which was used (a string, either “softmax” or “relu”).
     :return:
     dA_prev – Gradient of the cost with respect to the activation (of the previous layer l-1), same shape as A_prev.
     dW – Gradient of the cost with respect to W (current layer l), same shape as W.
     db – Gradient of the cost with respect to b (current layer l), same shape as b.
     """
 
-    if activation is "softmax":
-        dZ = softmax_backward(dA, cache['activation_cache'])
-    elif activation is "relu":
-        dZ = relu_backward(dA, cache['activation_cache'])
-    else:
-        raise Exception("activation should be either softmax or relu")
+    # activation is always relu, softmax activation should be done only once as only the output layers uses it
+    dZ = relu_backward(dA, cache['activation_cache'])
     dA_prev, dW, db = Linear_backward(dZ, cache)
     return dA_prev, dW, db
 
 
 def relu_backward(dA, activation_cache):
     """
-    Description:
-    Implements backward propagation for a ReLU unit
+    Implements backward propagation for a ReLU unit.
 
-    Input:
-    dA – the post-activation gradient
-    activation_cache – contains Z (stored during the forward propagation)
-
-    Output:
-    dZ – gradient of the cost with respect to Z 
+    :param dA: the post-activation gradient.
+    :param activation_cache: contains Z (stored during the forward propagation).
+    :return: dZ – gradient of the cost with respect to Z.
     """
-    pass
 
+    Z = activation_cache
+    gZ = reluDerivative(Z)
+    dZ = np.matmul(dA, gZ)
+    return dZ
+
+def reluDerivative(Z):
+    """
+    Computes the Relu derivative.
+    
+    :param Z: the linear component of the activation function.
+    :return: the Relu derivative.
+    """""
+
+    return (z > 0).astype(int)
 
 def softmax_backward(dA, activation_cache):
     """
-    Description:
-    Implements backward propagation for a softmax unit
+    Implements backward propagation for a softmax unit.
 
-    Input:
-    dA – the post-activation gradient
-    activation_cache – contains Z (stored during the forward propagation)
-
-    Output:
-    dZ – gradient of the cost with respect to Z 
+    :param dA: the post-activation gradient.
+    :param activation_cache: contains Y.
+    :return: dZ – gradient of the cost with respect to Z.
     """
-    pass
+
+    Y = activation_cache
+    dZ = dA - Y
+    return dZ
 
 
 def L_model_backward(AL, Y, caches):
@@ -312,6 +322,8 @@ def Predict(X, Y, parameters):
 # cost = compute_cost(AL, Y)
 # print(cost)
 # a = np.random.rand(3,2)
-a = np.array([[1,2], [3,4]])
-at = a.transpose()
+# a = np.array([[1,2], [3,4]])
+# at = a.transpose()
+z = np.random.uniform(-1, 1, (3,3))
+gz = reluDerivative(z)
 print("done")
