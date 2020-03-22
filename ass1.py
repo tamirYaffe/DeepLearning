@@ -119,30 +119,11 @@ def L_model_forward(X, parameters, use_batchnorm):
 
 def compute_cost(AL, Y):
     """
-    Description: Implement the cost function defined by equation. The requested cost function is categorical cross-entropy loss.
-    The formula is as follows :
-    where  is one for the true class (“ground-truth”) and  is the softmax-adjusted prediction (this link provides a good overview).
-
-    Input: 
-    AL – probability vector corresponding to your label predictions,
-    shape (num_of_classes, number of examples) 
-    Y – the labels vector (i.e. the ground truth)  
-
-    Output: 
-    cost – the cross-entropy cost
+    Implement the cost function defined by equation. The requested cost function is categorical cross-entropy loss.
+    :param AL: probability vector corresponding to your label predictions, shape (num_of_classes, number of examples).
+    :param Y: the labels vector (i.e. the ground truth).
+    :return: the cross-entropy cost
     """
-    # corect_logprobs = -np.log(AL[range(num_examples), y])
-    # data_loss = np.sum(corect_logprobs)
-    # return 1./num_examples * data_loss
-
-    # Compute cross-entropy loss
-    # logprobs = np.zeros([len(AL[0]), 1])
-    # for r in range(len(AL[0])):  # For each element in the batch
-    #     for c in range(len(Y[r, :])):  # For each class
-    #         if Y[r, c] != 0:  # Positive classes
-    #             logprobs[r] += -np.log(AL[r, c]) * Y[r, c]  # We sum the loss per class for each element of the batch
-    # data_loss = np.sum(logprobs) / len(AL[0])
-
     data_loss = 0
     m = len(AL[0])
     for r in range(m):  # For each element in the batch
