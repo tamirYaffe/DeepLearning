@@ -316,6 +316,7 @@ def L_layer_model(X, Y, layers_dims, learning_rate, num_iterations, batch_size):
     # initialize
     parameters = initialize_parameters(layers_dims)
     use_batchnorm = False
+    costs = None
 
     # Partition the dataset into batches of a fixed size
     number_of_batchs = int(len(X[0])/batch_size)
