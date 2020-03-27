@@ -1,4 +1,5 @@
 import numpy as np
+from keras.datasets import mnist
 
 
 # part 1
@@ -298,7 +299,7 @@ def Update_parameters(parameters, grads, learning_rate):
 # part 3
 # In this section you will use the functions you created in the previous sections to train the network and produce predictions.
 
-def L_layer_model(X, Y, layers_dims, learning_rate, num_iterations, batch_size):
+def L_layer_model(X, Y, learning_rate, num_iterations, batch_size, parameters):
     """
     Implements a L-layer neural network. All layers but the last should have the ReLU activation function, and the final layer will apply the softmax activation
     function. The size of the output layer should be equal to the number of labels in the data.
@@ -306,57 +307,149 @@ def L_layer_model(X, Y, layers_dims, learning_rate, num_iterations, batch_size):
 
     :param X: the input data, a numpy array of shape (height*width , number_of_examples).
     :param Y: the “real” labels of the data, a vector of shape (num_of_classes, number of examples).
-    :param layers_dims: a list containing the dimensions of each layer, including the input.
     :param learning_rate: the learning rate.
     :param num_iterations: number of iterations.
     :param batch_size: the number of examples in a single training batch.
+    :param parameters: a python dictionary containing the DNN architecture’s parameters.
     :return:
+     parameters – the parameters learnt by the system during the training (the same parameters that were updated in the update_parameters function).
+     costs – the values of the cost function (calculated by the compute_cost function). One value is to be saved after each 100 training iterations
+     (e.g. 3000 iterations -> 30 values). 
     """
 
     # initialize
-    parameters = initialize_parameters(layers_dims)
     use_batchnorm = False
     costs = None
 
     # Partition the dataset into batches of a fixed size
-    number_of_batchs = int(len(X[0])/batch_size)
+    number_of_batchs = int(len(X[0]) / batch_size)
+    if number_of_batchs != num_iterations:
+        raise Exception("number of batches doesnt equal to number of iterations")
     X_batchs = np.array_split(X, number_of_batchs, axis=1)
     Y_batchs = np.array_split(Y, number_of_batchs, axis=1)
 
-    for i in range(0, num_iterations):
-        for i in range(0, number_of_batchs):
-            X_batch = X_batchs[i]
-            Y_batch = Y_batchs[i]
+    for i in range(0, number_of_batchs):
+        X_batch = X_batchs[i]
+        Y_batch = Y_batchs[i]
 
-            # L_model_forward
-            AL, caches = L_model_forward(X_batch, parameters, use_batchnorm)
+        # L_model_forward
+        AL, caches = L_model_forward(X_batch, parameters, use_batchnorm)
 
-            # compute_cost
-            costs = compute_cost(AL, Y_batch)
+        # compute_cost
+        costs = compute_cost(AL, Y_batch)
 
-            # L_model_backward
-            Grads = L_model_backward(AL, Y_batch, caches)
+        # L_model_backward
+        Grads = L_model_backward(AL, Y_batch, caches)
 
-            # update parameters
-            parameters = Update_parameters(parameters, Grads, learning_rate)
+        # update parameters
+        parameters = Update_parameters(parameters, Grads, learning_rate)
 
     return parameters, costs
 
 
-def Predict(X, Y, parameters):
+def Predict(x_train, x_valid, x_test, y_train, y_valid, y_test):
     """
-    Description:
     The function receives an input data and the true labels and calculates the accuracy of the trained neural network on the data.
 
-    Input:
-    X – the input data, a numpy array of shape (height*width, number_of_examples)
-    Y – the “real” labels of the data, a vector of shape (num_of_classes, number of examples)
-    Parameters – a python dictionary containing the DNN architecture’s parameters 
-
-    Output:
-    accuracy – the accuracy measure of the neural net on the provided data (i.e. the percentage of the samples for which the correct label receives the hughest confidence score). Use the softmax function to normalize the output values.
+    :param x_train: the input train data, a numpy array of shape (height*width, number_of_examples)
+    :param x_valid: the input validation data, a numpy array of shape (height*width, number_of_examples)
+    :param x_test: the input test data, a numpy array of shape (height*width, number_of_examples)
+    :param y_train: the “real” labels of the train data, a vector of shape (num_of_classes, number of examples)
+    :param y_valid: the “real” labels of the validation data, a vector of shape (num_of_classes, number of examples)
+    :param y_test: the “real” labels of the test data, a vector of shape (num_of_classes, number of examples)
+    :return: test_accuracy – the accuracy measure of the neural net on the provided test data (i.e. the percentage of the samples for which the correct label
+     receives the hughest confidence score)
     """
-    pass
+
+    layers_dims = [784, 20, 7, 5, 10]
+    learning_rate = 0.009
+    num_iterations = -1
+    batch_size = 60
+    epochs = 20
+
+    # initialize parameters
+    parameters = initialize_parameters(layers_dims)
+
+    # train the model
+    for i in range(0, epochs):
+        parameters, costs = L_layer_model(x_train, y_train, learning_rate, num_iterations, batch_size, parameters)
+        # calculate val accuracy
+        val_accuracy = calculate_accuracy(parameters, x_valid, y_valid)
+        print("epoch %d: val_accuracy = %f" % (i, val_accuracy))
+
+    # calculate accuracy
+    test_accuracy = calculate_accuracy(parameters, x_test, y_test)
+
+    return test_accuracy
+
+
+def calculate_accuracy(parameters, X, Y):
+    """
+    Calculate accuracy of the model given input X and Y.
+
+    :param parameters: a python dictionary containing the DNN architecture’s parameters.
+    :param X: the input data, a numpy array of shape (height*width, number_of_examples).
+    :param Y: the “real” labels of the data, a vector of shape (num_of_classes, number of examples).
+    :return: accuracy – the accuracy measure of the neural net on the provided data (i.e. the percentage of the samples for which the correct label
+     receives the hughest confidence score)
+    """
+
+    use_batchnorm = False
+    AL = L_model_forward(X, parameters, use_batchnorm)
+    num_of_samples = X.shape[1]
+    AL = AL.transpose()
+    ALMax = np.zeros_like(AL)
+    ALMax[np.arange(len(AL)), AL.argmax(1)] = 1
+    ALMax = ALMax.transpose()
+    matrix_sum = ALMax + Y - 1
+    num_of_correct_predictions = matrix_sum[matrix_sum > 0].sum()
+    accuracy = num_of_correct_predictions / num_of_samples
+    return accuracy
+
+
+def load_dataset():
+    """
+    Loads the MINST dataset, divide to train validation and test sets, and perform flatten and reshape operations on it.
+
+    :return:
+     x_train: the input train data, a numpy array of shape (height*width, number_of_examples).
+     x_valid: the input validation data, a numpy array of shape (height*width, number_of_examples).
+     x_test: the input test data, a numpy array of shape (height*width, number_of_examples).
+     y_train: the “real” labels of the train data, a vector of shape (num_of_classes, number of examples).
+     y_valid: the “real” labels of the validation data, a vector of shape (num_of_classes, number of examples).
+     y_test: the “real” labels of the test data, a vector of shape (num_of_classes, number of examples).
+    """
+
+    # x_test(10000,28,28), x_train(60000,28,28), y_test(10000,), y_train(60000,)
+    (x_train, y_train), (x_test, y_test) = mnist.load_data()
+
+    # flatten and reshape test data
+    x_test = (x_test.reshape(10000, 784)).transpose()
+    y_test_re = np.zeros((10, 10000))
+    for i in range(0, 10000):
+        y_test_re[y_test[i]][i] = 1
+    y_test = y_test_re
+
+    # flatten and reshape train data
+    x_train = (x_train.reshape(60000, 784))
+    y_train_re = np.zeros((60000, 10))
+    for i in range(0, 60000):
+        y_train_re[i][y_train[i]] = 1
+    y_train = y_train_re
+
+    # create random validation data
+    training_idx = np.random.randint(x_train.shape[0], size=int(x_train.shape[0] * 80 / 100))
+    validation_idx = np.random.randint(x_train.shape[0], size=int(x_train.shape[0] * 20 / 100))
+    x_train, x_valid = x_train[training_idx, :].transpose(), x_train[validation_idx, :].transpose()
+    y_train, y_valid = y_train[training_idx, :].transpose(), y_train[validation_idx, :].transpose()
+
+    return x_train, x_valid, x_test, y_train, y_valid, y_test
+
+
+def main():
+    x_train, x_valid, x_test, y_train, y_valid, y_test = load_dataset()
+    accuracy = Predict(x_train, x_valid, x_test, y_train, y_valid, y_test)
+    print("training is done!, test accuracy: %f", accuracy)
 
 
 # Tests
@@ -376,4 +469,24 @@ def Predict(X, Y, parameters):
 # c = np.array_split(a, 2, axis=1)
 # a = np.array([[1,2], [3,4]])
 # at = a.transpose()
-print("done")
+# x = np.random.rand(10,4, 4)
+# x = (x.reshape(10,16)).transpose()
+
+# x = np.random.rand(100, 5)
+# training_idx = np.random.randint(x.shape[0], size=80)
+# test_idx = np.random.randint(x.shape[0], size=20)
+# training, test = x[training_idx, :], x[test_idx, :]
+
+# a = np.random.rand(3,5)
+# a = np.array([[0, 1, 4], [2, 2, 7], [4, 3, 5]])
+# b = np.zeros_like(a)
+# b[np.arange(len(a)), a.argmax(1)] = 1
+# main()
+# X = np.array([[0.99, 0.88, 0.77],
+#               [0.44, 0.80, 0.53],
+#               [0.98, 0, 0.67]])
+# Y = np.array([[0, 1, 0],
+#               [1, 0, 0],
+#               [0, 0, 1]])
+# accuracy = calculate_accuracy(None, X, Y)
+print("done: % d, %d" % (3, 4))
