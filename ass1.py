@@ -363,8 +363,8 @@ def Predict(x_train, x_valid, x_test, y_train, y_valid, y_test):
 
     layers_dims = [784, 20, 7, 5, 10]
     learning_rate = 0.009
-    num_iterations = -1
-    batch_size = 60
+    num_iterations = 60
+    batch_size = 1000
     epochs = 20
 
     # initialize parameters
