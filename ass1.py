@@ -288,6 +288,7 @@ def Update_parameters(parameters, grads, learning_rate):
     :param learning_rate: the learning rate used to update the parameters (the “alpha”).
     :return: parameters – the updated values of the parameters object provided as input.
     """
+
     for layer in range(1, len(parameters)):
         parameters[layer]["W"] = parameters[layer]["W"] - learning_rate * grads["dW" + str(layer)]
         parameters[layer]["b"] = parameters[layer]["b"] - learning_rate * grads["db" + str(layer)]
@@ -299,22 +300,47 @@ def Update_parameters(parameters, grads, learning_rate):
 
 def L_layer_model(X, Y, layers_dims, learning_rate, num_iterations, batch_size):
     """
-    Description:
-    Implements a L-layer neural network. All layers but the last should have the ReLU activation function, and the final layer will apply the softmax activation function. The size of the output layer should be equal to the number of labels in the data. Please select a batch size that enables your code to run well (i.e. no memory overflows while still running relatively fast).
+    Implements a L-layer neural network. All layers but the last should have the ReLU activation function, and the final layer will apply the softmax activation
+    function. The size of the output layer should be equal to the number of labels in the data.
+    Please select a batch size that enables your code to run well (i.e. no memory overflows while still running relatively fast).
 
-    Hint: the function should use the earlier functions in the following order: initialize -> L_model_forward -> compute_cost -> L_model_backward -> update parameters
-
-    Input:
-    X – the input data, a numpy array of shape (height*width , number_of_examples)
-    Comment: since the input is in grayscale we only have height and width, otherwise it would have been height*width*3
-    Y – the “real” labels of the data, a vector of shape (num_of_classes, number of examples)
-    Layer_dims – a list containing the dimensions of each layer, including the input batch_size – the number of examples in a single training batch.
-
-    Output:
-    parameters – the parameters learnt by the system during the training (the same parameters that were updated in the update_parameters function).
-    costs – the values of the cost function (calculated by the compute_cost function). One value is to be saved after each 100 training iterations (e.g. 3000 iterations -> 30 values). 
+    :param X: the input data, a numpy array of shape (height*width , number_of_examples).
+    :param Y: the “real” labels of the data, a vector of shape (num_of_classes, number of examples).
+    :param layers_dims: a list containing the dimensions of each layer, including the input.
+    :param learning_rate: the learning rate.
+    :param num_iterations: number of iterations.
+    :param batch_size: the number of examples in a single training batch.
+    :return:
     """
-    pass
+
+    # initialize
+    parameters = initialize_parameters(layers_dims)
+    use_batchnorm = False
+    costs = None
+
+    # Partition the dataset into batches of a fixed size
+    number_of_batchs = int(len(X[0])/batch_size)
+    X_batchs = np.array_split(X, number_of_batchs, axis=1)
+    Y_batchs = np.array_split(Y, number_of_batchs, axis=1)
+
+    for i in range(0, num_iterations):
+        for i in range(0, number_of_batchs):
+            X_batch = X_batchs[i]
+            Y_batch = Y_batchs[i]
+
+            # L_model_forward
+            AL, caches = L_model_forward(X_batch, parameters, use_batchnorm)
+
+            # compute_cost
+            costs = compute_cost(AL, Y_batch)
+
+            # L_model_backward
+            Grads = L_model_backward(AL, Y_batch, caches)
+
+            # update parameters
+            parameters = Update_parameters(parameters, Grads, learning_rate)
+
+    return parameters, costs
 
 
 def Predict(X, Y, parameters):
@@ -345,7 +371,9 @@ def Predict(X, Y, parameters):
 # Y = np.array([[1, 0], [0, 1], [0, 0]])
 # cost = compute_cost(AL, Y)
 # print(cost)
-# a = np.random.rand(3,2)
+# a = np.random.rand(3,7)
+# b = np.hsplit(a,2)
+# c = np.array_split(a, 2, axis=1)
 # a = np.array([[1,2], [3,4]])
 # at = a.transpose()
 print("done")
