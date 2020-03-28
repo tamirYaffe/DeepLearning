@@ -1,6 +1,6 @@
 import numpy as np
 from keras.datasets import mnist
-
+import math
 
 # part 1
 # Implement the following functions, which are used to carry out the forward propagation process:
@@ -14,9 +14,11 @@ def initialize_parameters(layer_dims):
 
     parameters = [None]
     for layer in range(1, len(layer_dims)):
-        W = np.random.rand(layer_dims[layer], layer_dims[layer - 1]) + 0.5  # values 0.5 - 1.5
-        b = np.zeros(layer_dims[layer])
-        layer_dict = {'W': W, 'b': b}
+        U = np.random.uniform(-1/math.sqrt(layer_dims[layer]*layer_dims[layer - 1]), 1/math.sqrt(layer_dims[layer]*layer_dims[layer - 1]), layer_dims[layer]*layer_dims[layer - 1])
+        # W = np.random.randn(layer_dims[layer], layer_dims[layer - 1]) * np.sqrt(2/layer_dims[layer - 1])
+        W = np.reshape(U,(layer_dims[layer], layer_dims[layer - 1]))
+        B = np.zeros(layer_dims[layer])
+        layer_dict = {'W': W, 'B': B}
         parameters.append(layer_dict)
     return parameters
 
@@ -34,9 +36,16 @@ def linear_forward(A, W, B):
     """
 
     # Z = W * A + B
-    Z = np.matmul(W, A) + B
+    Z = matadd(np.matmul(W, A), B)
     linear_cache = {'A': A, 'W': W, 'B': B}
     return Z, linear_cache
+
+def matadd(mat1, mat2):
+    mat3 = np.copy(mat2)
+    for i in range(1, mat1.shape[1]):
+        mat3 = np.vstack((mat3, mat2))
+    mat3 = mat3.transpose()
+    return mat1 + mat3
 
 
 def softmax(Z):
@@ -46,10 +55,11 @@ def softmax(Z):
     """
 
     # second version to compute softmax
-    # exp = np.exp(Z - np.max(Z))
-    # A = exp / exp.sum(axis=0)
-    exp_scores = np.exp(Z)
-    A = exp_scores / np.sum(exp_scores, axis=1, keepdims=True)
+    exp = np.exp(Z - np.max(Z))
+    A = exp / exp.sum(axis=0)
+    # exp_scores = np.exp(Z)
+    # A = exp_scores / np.sum(exp_scores, axis=1, keepdims=True)
+
     activation_cache = Z
     return A, activation_cache
 
@@ -133,8 +143,8 @@ def compute_cost(AL, Y):
 
     data_loss = 0
     m = len(AL[0])
-    for r in range(m):  # For each element in the batch
-        for c in range(len(Y[r, :])):  # For each class
+    for c in range(m):  # For each element in the batch
+        for r in range(len(AL)):  # For each class
             if Y[r, c] != 0:  # Positive classes
                 data_loss += -np.log(AL[r, c]) * Y[r, c]  # We sum the loss per class for each element of the batch
     data_loss = -1 / m * data_loss
@@ -172,8 +182,9 @@ def Linear_backward(dZ, cache):
     """
 
     dA_prev = np.matmul(cache['linear_cache']['W'].transpose(), dZ)
-    dW = np.matmul(dZ, cache['linear_cache']['A'].transpose())
-    db = dZ
+    dW = np.matmul(dZ, cache['linear_cache']['A'].transpose()) / len(dZ[0])
+    # db = np.sum(dZ, axis=1, keepdims=True) / len(dZ[0])
+    db = np.mean(dZ, axis=1)  # not sure if this is what its need to be
     return dA_prev, dW, db
 
 
@@ -206,7 +217,7 @@ def relu_backward(dA, activation_cache):
 
     Z = activation_cache
     gZ = reluDerivative(Z)
-    dZ = np.matmul(dA, gZ)
+    dZ = dA * gZ
     return dZ
 
 
@@ -253,6 +264,8 @@ def L_model_backward(AL, Y, caches):
     last_layer = layers_size - 1
 
     # last layer
+    # dA = -np.divide(Y, AL) + np.divide(1 - Y, 1 - AL)
+
     dZ = softmax_backward(AL, Y)
     dA_prev, dW, db = Linear_backward(dZ, caches[last_layer])
     update_Grads(Grads, last_layer, dA_prev, dW, db)
@@ -292,7 +305,10 @@ def Update_parameters(parameters, grads, learning_rate):
 
     for layer in range(1, len(parameters)):
         parameters[layer]["W"] = parameters[layer]["W"] - learning_rate * grads["dW" + str(layer)]
-        parameters[layer]["b"] = parameters[layer]["b"] - learning_rate * grads["db" + str(layer)]
+        parameters[layer]["B"] = parameters[layer]["B"] - learning_rate * grads["db" + str(layer)]
+        # B_prev = parameters[layer]["B"]
+        # B_grad = learning_rate * grads["db" + str(layer)]
+        # B_new = B_prev - B_grad
     return parameters
 
 
@@ -363,9 +379,9 @@ def Predict(x_train, x_valid, x_test, y_train, y_valid, y_test):
 
     layers_dims = [784, 20, 7, 5, 10]
     learning_rate = 0.009
-    num_iterations = 60
+    num_iterations = 48
     batch_size = 1000
-    epochs = 20
+    epochs = 30
 
     # initialize parameters
     parameters = initialize_parameters(layers_dims)
@@ -375,7 +391,7 @@ def Predict(x_train, x_valid, x_test, y_train, y_valid, y_test):
         parameters, costs = L_layer_model(x_train, y_train, learning_rate, num_iterations, batch_size, parameters)
         # calculate val accuracy
         val_accuracy = calculate_accuracy(parameters, x_valid, y_valid)
-        print("epoch %d: val_accuracy = %f" % (i, val_accuracy))
+        print("epoch %d: val_accuracy = %f" % (i+1, val_accuracy))
 
     # calculate accuracy
     test_accuracy = calculate_accuracy(parameters, x_test, y_test)
@@ -395,7 +411,7 @@ def calculate_accuracy(parameters, X, Y):
     """
 
     use_batchnorm = False
-    AL = L_model_forward(X, parameters, use_batchnorm)
+    AL, caches = L_model_forward(X, parameters, use_batchnorm)
     num_of_samples = X.shape[1]
     AL = AL.transpose()
     ALMax = np.zeros_like(AL)
@@ -449,44 +465,8 @@ def load_dataset():
 def main():
     x_train, x_valid, x_test, y_train, y_valid, y_test = load_dataset()
     accuracy = Predict(x_train, x_valid, x_test, y_train, y_valid, y_test)
-    print("training is done!, test accuracy: %f", accuracy)
+    print("training is done!, test accuracy: %f" %(accuracy))
 
 
-# Tests
-# layer_dims_test = [3, 4, 1]
-# d = initialize_parameters(layer_dims_test)
-# a = np.array([[1,2], [3,4]])
-# a = a.flatten()
-# x = np.ones((3,1)) + 0.5
-# w = np.ones((4,3)) + 1
-# z = np.matmul(w,x)
-# AL = np.array([[0, 0], [0, 0], [0, 0]])
-# Y = np.array([[1, 0], [0, 1], [0, 0]])
-# cost = compute_cost(AL, Y)
-# print(cost)
-# a = np.random.rand(3,7)
-# b = np.hsplit(a,2)
-# c = np.array_split(a, 2, axis=1)
-# a = np.array([[1,2], [3,4]])
-# at = a.transpose()
-# x = np.random.rand(10,4, 4)
-# x = (x.reshape(10,16)).transpose()
-
-# x = np.random.rand(100, 5)
-# training_idx = np.random.randint(x.shape[0], size=80)
-# test_idx = np.random.randint(x.shape[0], size=20)
-# training, test = x[training_idx, :], x[test_idx, :]
-
-# a = np.random.rand(3,5)
-# a = np.array([[0, 1, 4], [2, 2, 7], [4, 3, 5]])
-# b = np.zeros_like(a)
-# b[np.arange(len(a)), a.argmax(1)] = 1
-# main()
-# X = np.array([[0.99, 0.88, 0.77],
-#               [0.44, 0.80, 0.53],
-#               [0.98, 0, 0.67]])
-# Y = np.array([[0, 1, 0],
-#               [1, 0, 0],
-#               [0, 0, 1]])
-# accuracy = calculate_accuracy(None, X, Y)
-print("done: % d, %d" % (3, 4))
+if __name__ == '__main__':
+    main()
