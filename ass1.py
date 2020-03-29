@@ -15,7 +15,6 @@ def initialize_parameters(layer_dims):
     parameters = [None]
     for layer in range(1, len(layer_dims)):
         U = np.random.uniform(-1/math.sqrt(layer_dims[layer]*layer_dims[layer - 1]), 1/math.sqrt(layer_dims[layer]*layer_dims[layer - 1]), layer_dims[layer]*layer_dims[layer - 1])
-        # W = np.random.randn(layer_dims[layer], layer_dims[layer - 1]) * np.sqrt(2/layer_dims[layer - 1])
         W = np.reshape(U,(layer_dims[layer], layer_dims[layer - 1]))
         B = np.zeros(layer_dims[layer])
         layer_dict = {'W': W, 'B': B}
@@ -399,7 +398,7 @@ def Predict(x_train, x_valid, x_test, y_train, y_valid, y_test):
         print("epoch %d: val_accuracy = %f" % (i+1, val_accuracy))
         if abs(val_accuracy-prev_val_accuracy) < 0.0001:
             flat_improvement_ctr =flat_improvement_ctr + 1
-            if flat_improvement_ctr == 3:
+            if flat_improvement_ctr == 2:
                 break
         else:
             flat_improvement_ctr = 0
