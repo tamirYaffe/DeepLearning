@@ -1,6 +1,7 @@
 import numpy as np
 from keras.datasets import mnist
 import math
+import time
 
 # part 1
 # Implement the following functions, which are used to carry out the forward propagation process:
@@ -474,10 +475,13 @@ def load_dataset():
 
 
 def main():
+    np.random.seed(64)
     x_train, x_valid, x_test, y_train, y_valid, y_test = load_dataset()
     accuracy = Predict(x_train, x_valid, x_test, y_train, y_valid, y_test)
     print("training is done!, test accuracy: %f" %(accuracy))
 
 
 if __name__ == '__main__':
+    start_time = time.time()
     main()
+    print("--- %s seconds ---" % (time.time() - start_time))
