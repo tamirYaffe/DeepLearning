@@ -324,7 +324,7 @@ def L_layer_model(X, Y, learning_rate, num_iterations, batch_size, parameters):
     :param X: the input data, a numpy array of shape (height*width , number_of_examples).
     :param Y: the “real” labels of the data, a vector of shape (num_of_classes, number of examples).
     :param learning_rate: the learning rate.
-    :param num_iterations: number of iterations.
+    :param num_iterations: number of total iterations so far.
     :param batch_size: the number of examples in a single training batch.
     :param parameters: a python dictionary containing the DNN architecture’s parameters.
     :return:
@@ -335,16 +335,16 @@ def L_layer_model(X, Y, learning_rate, num_iterations, batch_size, parameters):
 
     # initialize
     use_batchnorm = False
-    costs = None
+    costs = []
 
     # Partition the dataset into batches of a fixed size
     number_of_batchs = int(len(X[0]) / batch_size)
-    if number_of_batchs != num_iterations:
-        raise Exception("number of batches doesnt equal to number of iterations")
     X_batchs = np.array_split(X, number_of_batchs, axis=1)
     Y_batchs = np.array_split(Y, number_of_batchs, axis=1)
 
     for i in range(0, number_of_batchs):
+        num_iterations = num_iterations+1
+
         X_batch = X_batchs[i]
         Y_batch = Y_batchs[i]
 
@@ -352,7 +352,10 @@ def L_layer_model(X, Y, learning_rate, num_iterations, batch_size, parameters):
         AL, caches = L_model_forward(X_batch, parameters, use_batchnorm)
 
         # compute_cost
-        costs = compute_cost(AL, Y_batch)
+        if num_iterations%100 == 0:
+            cost = compute_cost(AL, Y_batch)
+            print("iteration %d: cost = %f" % (num_iterations, cost))
+            costs.append(cost)
 
         # L_model_backward
         Grads = L_model_backward(AL, Y_batch, caches)
@@ -381,17 +384,26 @@ def Predict(x_train, x_valid, x_test, y_train, y_valid, y_test):
     learning_rate = 0.009
     num_iterations = 48
     batch_size = 1000
-    epochs = 30
+    epochs = 100
+    prev_val_accuracy = 0
+    flat_improvement_ctr = 0
 
     # initialize parameters
     parameters = initialize_parameters(layers_dims)
 
     # train the model
     for i in range(0, epochs):
-        parameters, costs = L_layer_model(x_train, y_train, learning_rate, num_iterations, batch_size, parameters)
+        parameters, costs = L_layer_model(x_train, y_train, learning_rate, i*num_iterations, batch_size, parameters)
         # calculate val accuracy
         val_accuracy = calculate_accuracy(parameters, x_valid, y_valid)
         print("epoch %d: val_accuracy = %f" % (i+1, val_accuracy))
+        if abs(val_accuracy-prev_val_accuracy) < 0.0001:
+            flat_improvement_ctr =flat_improvement_ctr + 1
+            if flat_improvement_ctr == 3:
+                break
+        else:
+            flat_improvement_ctr = 0
+        prev_val_accuracy = val_accuracy
 
     # calculate accuracy
     test_accuracy = calculate_accuracy(parameters, x_test, y_test)
