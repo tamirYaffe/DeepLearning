@@ -387,15 +387,20 @@ def Predict(x_train, x_valid, x_test, y_train, y_valid, y_test):
     epochs = 100
     prev_val_accuracy = 0
     flat_improvement_ctr = 0
+    best_val_accuracy = 100000
 
     # initialize parameters
     parameters = initialize_parameters(layers_dims)
+    best_parameters = parameters
 
     # train the model
     for i in range(0, epochs):
         parameters, costs = L_layer_model(x_train, y_train, learning_rate, i*num_iterations, batch_size, parameters)
         # calculate val accuracy
         val_accuracy = calculate_accuracy(parameters, x_valid, y_valid)
+        if abs(val_accuracy) < abs(best_val_accuracy):
+            best_val_accuracy = val_accuracy
+            best_parameters =parameters
         print("epoch %d: val_accuracy = %f" % (i+1, val_accuracy))
         if abs(val_accuracy-prev_val_accuracy) < 0.0001:
             flat_improvement_ctr =flat_improvement_ctr + 1
@@ -406,7 +411,7 @@ def Predict(x_train, x_valid, x_test, y_train, y_valid, y_test):
         prev_val_accuracy = val_accuracy
 
     # calculate accuracy
-    test_accuracy = calculate_accuracy(parameters, x_test, y_test)
+    test_accuracy = calculate_accuracy(best_parameters, x_test, y_test)
 
     return test_accuracy
 
