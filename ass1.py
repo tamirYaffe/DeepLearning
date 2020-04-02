@@ -2,7 +2,7 @@ import numpy as np
 from keras.datasets import mnist
 import math
 import time
-from mxnet import nd
+
 # part 1
 # Implement the following functions, which are used to carry out the forward propagation process:
 
