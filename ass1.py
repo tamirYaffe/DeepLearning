@@ -2,7 +2,7 @@ import numpy as np
 from keras.datasets import mnist
 import math
 import time
-
+from mxnet import nd
 # part 1
 # Implement the following functions, which are used to carry out the forward propagation process:
 
@@ -99,7 +99,7 @@ def linear_activation_forward(A_prev, W, B, activation):
     return A, cache
 
 
-def L_model_forward(X, parameters, use_batchnorm):
+def L_model_forward(X, parameters, use_batchnorm, use_dropuot):
     """
     Implement forward propagation for the [LINEAR->RELU]*(L-1)->LINEAR->SOFTMAX computation.
 
@@ -117,12 +117,18 @@ def L_model_forward(X, parameters, use_batchnorm):
 
     # first layer
     A, cache = linear_activation_forward(X, parameters[first_layer]['W'], parameters[first_layer]['B'], "relu")
+    if use_dropuot:
+        A, dropout_mask = apply_dropout(A)
+        cache['dropout_mask'] = dropout_mask
     caches.append(cache)
     if use_batchnorm:
         A = apply_batchnorm(A)
     # hidden layers
     for layer in range(2, last_layer):
         A, cache = linear_activation_forward(A, parameters[layer]['W'], parameters[layer]['B'], "relu")
+        if use_dropuot:
+            A, dropout_mask = apply_dropout(A)
+            cache['dropout_mask'] = dropout_mask
         caches.append(cache)
         if use_batchnorm:
             A = apply_batchnorm(A)
@@ -159,11 +165,13 @@ def apply_batchnorm(A):
     :return: the normalized activation values, based on the formula learned in class.
     """
 
-    mean = np.mean(A, axis=0)
-    variance = np.mean((A - mean) ** 2, axis=0)
+    mean = np.mean(A, axis=1)
+    variance = np.var(A, axis=1)
     float_epsilon = np.finfo(float).eps
-    NA = (A - mean) * 1.0 / np.sqrt(variance + float_epsilon)
-    return NA
+    # NA = (A - mean) * 1.0 / np.sqrt(variance + float_epsilon)
+    for i in range(0, A.shape[0]):
+        A[i] = (A[i] - mean[i]) * 1.0 / np.sqrt(variance[i] + float_epsilon)
+    return A
 
 
 # part 2
@@ -246,7 +254,7 @@ def softmax_backward(dA, activation_cache):
     return dZ
 
 
-def L_model_backward(AL, Y, caches):
+def L_model_backward(AL, Y, caches, use_dropout):
     """
     Implement the backward propagation process for the entire network.
 
@@ -272,6 +280,8 @@ def L_model_backward(AL, Y, caches):
 
     # hidden layers
     for layer in reversed(range(1, last_layer)):
+        if use_dropout:
+            dA_prev = np.multiply(dA_prev, caches[layer]['dropout_mask'])
         dA_prev, dW, db = linear_activation_backward(dA_prev, caches[layer])
         update_Grads(Grads, layer, dA_prev, dW, db)
 
@@ -335,7 +345,9 @@ def L_layer_model(X, Y, learning_rate, num_iterations, batch_size, parameters):
 
     # initialize
     use_batchnorm = False
+    use_dropout = False
     costs = []
+    cost = 0
 
     # Partition the dataset into batches of a fixed size
     number_of_batchs = int(len(X[0]) / batch_size)
@@ -349,21 +361,21 @@ def L_layer_model(X, Y, learning_rate, num_iterations, batch_size, parameters):
         Y_batch = Y_batchs[i]
 
         # L_model_forward
-        AL, caches = L_model_forward(X_batch, parameters, use_batchnorm)
+        AL, caches = L_model_forward(X_batch, parameters, use_batchnorm, use_dropout)
 
         # compute_cost
         if num_iterations%100 == 0:
             cost = compute_cost(AL, Y_batch)
-            print("iteration %d: cost = %f" % (num_iterations, cost))
+            # print("iteration %d: cost = %f" % (num_iterations, cost))
             costs.append(cost)
 
         # L_model_backward
-        Grads = L_model_backward(AL, Y_batch, caches)
+        Grads = L_model_backward(AL, Y_batch, caches, use_dropout)
 
         # update parameters
         parameters = Update_parameters(parameters, Grads, learning_rate)
 
-    return parameters, costs
+    return parameters, cost
 
 
 def Predict(x_train, x_valid, x_test, y_train, y_valid, y_test):
@@ -376,14 +388,14 @@ def Predict(x_train, x_valid, x_test, y_train, y_valid, y_test):
     :param y_train: the “real” labels of the train data, a vector of shape (num_of_classes, number of examples)
     :param y_valid: the “real” labels of the validation data, a vector of shape (num_of_classes, number of examples)
     :param y_test: the “real” labels of the test data, a vector of shape (num_of_classes, number of examples)
-    :return: test_accuracy – the accuracy measure of the neural net on the provided test data (i.e. the percentage of the samples for which the correct label
+    :return: accuracy – the accuracy measure of the neural net on the provided train, validation and test sets, (i.e. the percentage of the samples for which the correct label
      receives the hughest confidence score)
     """
 
     layers_dims = [784, 20, 7, 5, 10]
     learning_rate = 0.009
-    num_iterations = 48
-    batch_size = 1000
+    num_iterations = 100
+    batch_size = 480
     epochs = 100
     prev_val_accuracy = 0
     flat_improvement_ctr = 0
@@ -395,15 +407,15 @@ def Predict(x_train, x_valid, x_test, y_train, y_valid, y_test):
 
     # train the model
     for i in range(0, epochs):
-        parameters, costs = L_layer_model(x_train, y_train, learning_rate, i*num_iterations, batch_size, parameters)
+        parameters, cost = L_layer_model(x_train, y_train, learning_rate, i * num_iterations, batch_size, parameters)
         # calculate val accuracy
         val_accuracy = calculate_accuracy(parameters, x_valid, y_valid)
         if abs(val_accuracy) < abs(best_val_accuracy):
             best_val_accuracy = val_accuracy
-            best_parameters =parameters
-        print("epoch %d: val_accuracy = %f" % (i+1, val_accuracy))
-        if abs(val_accuracy-prev_val_accuracy) < 0.0001:
-            flat_improvement_ctr =flat_improvement_ctr + 1
+            best_parameters = parameters
+        print("epoch %d: val_accuracy = %f , cost = %f" % (i + 1, val_accuracy, cost))
+        if abs(val_accuracy - prev_val_accuracy) < 0.0001:
+            flat_improvement_ctr = flat_improvement_ctr + 1
             if flat_improvement_ctr == 2:
                 break
         else:
@@ -411,9 +423,11 @@ def Predict(x_train, x_valid, x_test, y_train, y_valid, y_test):
         prev_val_accuracy = val_accuracy
 
     # calculate accuracy
+    train_accuracy = calculate_accuracy(best_parameters, x_train, y_train)
+    validation_accuracy = calculate_accuracy(best_parameters, x_valid, y_valid)
     test_accuracy = calculate_accuracy(best_parameters, x_test, y_test)
-
-    return test_accuracy
+    accuracy = {'train_accuracy':train_accuracy, 'validation_accuracy': validation_accuracy, 'test_accuracy':test_accuracy}
+    return accuracy
 
 
 def calculate_accuracy(parameters, X, Y):
@@ -428,7 +442,7 @@ def calculate_accuracy(parameters, X, Y):
     """
 
     use_batchnorm = False
-    AL, caches = L_model_forward(X, parameters, use_batchnorm)
+    AL, caches = L_model_forward(X, parameters, use_batchnorm, False)
     num_of_samples = X.shape[1]
     AL = AL.transpose()
     ALMax = np.zeros_like(AL)
@@ -478,12 +492,26 @@ def load_dataset():
 
     return x_train, x_valid, x_test, y_train, y_valid, y_test
 
+def apply_dropout(A):
+    """
+    performs dropout on the received activation values of a given layer.
+
+    :param A: the activation values of a given layer.
+    :return: the dropout activation values, based on the formula learned in class.
+    """
+    keep_prop = 0.5
+    dropout_mask = np.random.rand(A.shape[0], A.shape[1]) < keep_prop
+    dropout_mask = dropout_mask / keep_prop
+    return np.multiply(A, dropout_mask), dropout_mask
 
 def main():
     np.random.seed(64)
     x_train, x_valid, x_test, y_train, y_valid, y_test = load_dataset()
     accuracy = Predict(x_train, x_valid, x_test, y_train, y_valid, y_test)
-    print("training is done!, test accuracy: %f" %(accuracy))
+    print("training is done!")
+    print("train accuracy: %f" % (accuracy['train_accuracy']))
+    print("validation accuracy: %f" % (accuracy['validation_accuracy']))
+    print("test accuracy: %f" % (accuracy['test_accuracy']))
 
 
 if __name__ == '__main__':
