@@ -2,6 +2,7 @@ import time
 from PIL import Image
 from keras import Input, Sequential, Model
 from keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Lambda
+from keras.optimizers import Adam
 from keras.regularizers import l2
 from keras import backend as K
 from numpy import asarray
@@ -37,6 +38,9 @@ def get_siamese_model(input_shape):
 
     # Convolutional Neural Network
     model = Sequential()
+    model.add(Conv2D(64, (41, 41), activation='relu', input_shape=input_shape,
+                     kernel_initializer=initialize_weights, kernel_regularizer=l2(2e-4)))
+    model.add(MaxPooling2D())
     model.add(Conv2D(64, (10, 10), activation='relu', input_shape=input_shape,
                      kernel_initializer=initialize_weights, kernel_regularizer=l2(2e-4)))
     model.add(MaxPooling2D())
@@ -89,32 +93,38 @@ def get_image_data(name, num):
 
 
 def load_dataset(dataset_type):
-    dataset = []
+    # consider reading all lines and shuffle them..
+    x1_data = []
+    x2_data = []
+    y_data = []
     file_path = "dataset" + path_separator + dataset_type + ".txt"
     file = open(file_path, "r")
     file.readline()
     for line in file:
         line = line.split()
-        x = []
         y = 0
         if len(line) == 3:
-            x.append(get_image_data(name=line[0], num=line[1]))
-            x.append(get_image_data(name=line[0], num=line[2]))
+            x1_data.append(get_image_data(name=line[0], num=line[1]))
+            x2_data.append(get_image_data(name=line[0], num=line[2]))
             y = 1
         elif len(line) == 4:
-            x.append(get_image_data(name=line[0], num=line[1]))
-            x.append(get_image_data(name=line[2], num=line[3]))
-        data_line = {'X': x, 'Y': y}
-        dataset.append(data_line)
+            x1_data.append(get_image_data(name=line[0], num=line[1]))
+            x2_data.append(get_image_data(name=line[2], num=line[3]))
+        y_data.append(y)
     file.close()
-    return dataset
+    return [x1_data, x2_data], y_data
 
 
 def main():
-    # train = load_dataset(dataset_type="train")
-    # test = load_dataset(dataset_type="test")
-    model = get_siamese_model((105, 105, 1))
+    x_train, y_train = load_dataset(dataset_type="train")
+    model = get_siamese_model((250, 250, 1))
     model.summary()
+    optimizer = Adam(lr=0.00006)
+    model.compile(loss="binary_crossentropy", optimizer=optimizer)
+    # model.fit(x_train, y_train, batch_size=16, epochs=10)
+    # score = model.evaluate(x_test, y_test, batch_size=16)
+    # hist = model.fit()
+    # model.train_on_batch()
 
 
 if __name__ == '__main__':
