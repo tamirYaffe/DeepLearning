@@ -7,6 +7,8 @@ from keras.regularizers import l2
 from keras import backend as K
 from numpy import asarray
 import os
+import numpy as np
+import pickle
 
 path_separator = os.path.sep
 
@@ -103,28 +105,31 @@ def load_dataset(dataset_type):
     for line in file:
         line = line.split()
         y = 0
+        x1_data.append(np.expand_dims(get_image_data(name=line[0], num=line[1]), axis=2))
         if len(line) == 3:
-            x1_data.append(get_image_data(name=line[0], num=line[1]))
-            x2_data.append(get_image_data(name=line[0], num=line[2]))
+            x2_data.append(np.expand_dims(get_image_data(name=line[0], num=line[2]), axis=2))
             y = 1
         elif len(line) == 4:
-            x1_data.append(get_image_data(name=line[0], num=line[1]))
-            x2_data.append(get_image_data(name=line[2], num=line[3]))
+            x2_data.append(np.expand_dims(get_image_data(name=line[2], num=line[3]), axis=2))
         y_data.append(y)
     file.close()
     return [x1_data, x2_data], y_data
 
 
 def main():
-    x_train, y_train = load_dataset(dataset_type="train")
+    # x_train, y_train = load_dataset(dataset_type="train")
+    # x_test, y_test = load_dataset(dataset_type="test")
+    with open('train.pickle', 'rb') as f:
+        x_train, y_train = pickle.load(f)
+    with open('test.pickle', 'rb') as f:
+        x_test, y_test = pickle.load(f)
     model = get_siamese_model((250, 250, 1))
     model.summary()
     optimizer = Adam(lr=0.00006)
     model.compile(loss="binary_crossentropy", optimizer=optimizer)
-    # model.fit(x_train, y_train, batch_size=16, epochs=10)
-    # score = model.evaluate(x_test, y_test, batch_size=16)
-    # hist = model.fit()
-    # model.train_on_batch()
+    hist = model.fit(x_train, y_train, batch_size=22, epochs=10)
+    model.save_weights('my_model_weights.h5')
+    score = model.evaluate(x_test, y_test, batch_size=50)
 
 
 if __name__ == '__main__':
