@@ -101,22 +101,27 @@ def load_dataset(dataset_type):
     y_data = []
     file_path = "dataset" + path_separator + dataset_type + ".txt"
     file = open(file_path, "r")
-    file.readline()
-    for line in file:
+    lines = file.readlines()
+    np.random.shuffle(lines)
+    for line in lines:
         line = line.split()
         y = 0
-        x1_data.append(np.expand_dims(get_image_data(name=line[0], num=line[1]), axis=2))
         if len(line) == 3:
+            x1_data.append(np.expand_dims(get_image_data(name=line[0], num=line[1]), axis=2))
             x2_data.append(np.expand_dims(get_image_data(name=line[0], num=line[2]), axis=2))
             y = 1
+            y_data.append(y)
         elif len(line) == 4:
+            x1_data.append(np.expand_dims(get_image_data(name=line[0], num=line[1]), axis=2))
             x2_data.append(np.expand_dims(get_image_data(name=line[2], num=line[3]), axis=2))
-        y_data.append(y)
+            y_data.append(y)
     file.close()
     return [x1_data, x2_data], y_data
 
 
 def main():
+    np.random.seed(64)
+
     # x_train, y_train = load_dataset(dataset_type="train")
     # x_test, y_test = load_dataset(dataset_type="test")
     with open('train.pickle', 'rb') as f:
@@ -126,13 +131,16 @@ def main():
     model = get_siamese_model((250, 250, 1))
     model.summary()
     optimizer = Adam(lr=0.00006)
-    model.compile(loss="binary_crossentropy", optimizer=optimizer)
+    model.compile(loss="binary_crossentropy", optimizer=optimizer, metrics=['accuracy'])
     hist = model.fit(x_train, y_train, batch_size=22, epochs=10)
     model.save_weights('my_model_weights.h5')
     score = model.evaluate(x_test, y_test, batch_size=50)
-
+    print(score)
 
 if __name__ == '__main__':
     start_time = time.time()
     main()
+    # x_train, y_train = load_dataset(dataset_type="train")
+    # with open('trainShuffled.pickle', 'wb') as f:
+    #     pickle.dump([x_train, y_train], f)
     print("--- %s seconds ---" % (time.time() - start_time))
