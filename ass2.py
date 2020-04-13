@@ -1,7 +1,7 @@
 import time
 from PIL import Image
 from keras import Input, Sequential, Model
-from keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Lambda
+from keras.layers import Conv2D, MaxPooling2D, Flatten, Dense, Lambda, BatchNormalization, Activation
 from keras.optimizers import Adam
 from keras.regularizers import l2
 from keras import backend as K
@@ -9,6 +9,7 @@ from numpy import asarray
 import os
 import numpy as np
 import pickle
+from sklearn.model_selection import train_test_split
 
 path_separator = os.path.sep
 
@@ -40,21 +41,31 @@ def get_siamese_model(input_shape):
 
     # Convolutional Neural Network
     model = Sequential()
-    model.add(Conv2D(64, (41, 41), activation='relu', input_shape=input_shape,
+    model.add(Conv2D(64, (41, 41), input_shape=input_shape,
                      kernel_initializer=initialize_weights, kernel_regularizer=l2(2e-4)))
+    model.add(BatchNormalization())
+    model.add(Activation("relu"))
     model.add(MaxPooling2D())
-    model.add(Conv2D(64, (10, 10), activation='relu', input_shape=input_shape,
+    model.add(Conv2D(64, (10, 10), input_shape=input_shape,
                      kernel_initializer=initialize_weights, kernel_regularizer=l2(2e-4)))
+    model.add(BatchNormalization())
+    model.add(Activation("relu"))
     model.add(MaxPooling2D())
-    model.add(Conv2D(128, (7, 7), activation='relu',
+    model.add(Conv2D(128, (7, 7),
                      kernel_initializer=initialize_weights,
                      bias_initializer=initialize_bias, kernel_regularizer=l2(2e-4)))
+    model.add(BatchNormalization())
+    model.add(Activation("relu"))
     model.add(MaxPooling2D())
-    model.add(Conv2D(128, (4, 4), activation='relu', kernel_initializer=initialize_weights,
+    model.add(Conv2D(128, (4, 4), kernel_initializer=initialize_weights,
                      bias_initializer=initialize_bias, kernel_regularizer=l2(2e-4)))
+    model.add(BatchNormalization())
+    model.add(Activation("relu"))
     model.add(MaxPooling2D())
-    model.add(Conv2D(256, (4, 4), activation='relu', kernel_initializer=initialize_weights,
+    model.add(Conv2D(256, (4, 4), kernel_initializer=initialize_weights,
                      bias_initializer=initialize_bias, kernel_regularizer=l2(2e-4)))
+    model.add(BatchNormalization())
+    model.add(Activation("relu"))
     model.add(Flatten())
     model.add(Dense(4096, activation='sigmoid',
                     kernel_regularizer=l2(1e-3),
@@ -124,17 +135,21 @@ def main():
 
     # x_train, y_train = load_dataset(dataset_type="train")
     # x_test, y_test = load_dataset(dataset_type="test")
-    with open('train.pickle', 'rb') as f:
+    with open('trainShuffled.pickle', 'rb') as f:
         x_train, y_train = pickle.load(f)
     with open('test.pickle', 'rb') as f:
         x_test, y_test = pickle.load(f)
+    x1_train, x1_val, y1, y2 = train_test_split(x_train[0], y_train, test_size=0.2, random_state=1)
+    x2_train, x2_val, y_train, y_val = train_test_split(x_train[1], y_train, test_size=0.2, random_state=1)
+    x_train = [x1_train, x2_train]
+    x_val = [x1_val, x2_val]
     model = get_siamese_model((250, 250, 1))
     model.summary()
     optimizer = Adam(lr=0.00006)
     model.compile(loss="binary_crossentropy", optimizer=optimizer, metrics=['accuracy'])
-    hist = model.fit(x_train, y_train, batch_size=22, epochs=10)
+    hist = model.fit(x_train, y_train, batch_size=32, epochs=10, validation_data=(x_val, y_val))
     model.save_weights('my_model_weights.h5')
-    score = model.evaluate(x_test, y_test, batch_size=50)
+    score = model.evaluate(x_test, y_test, batch_size=32)
     print(score)
 
 if __name__ == '__main__':
