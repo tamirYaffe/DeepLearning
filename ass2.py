@@ -12,6 +12,7 @@ import os
 import numpy as np
 import pickle
 from sklearn.model_selection import train_test_split
+import matplotlib.pyplot as plt
 import cv2
 from keras.models import load_model
 
@@ -27,6 +28,11 @@ def initialize_bias(shape, dtype=None):
 
 
 def get_siamese_model(input_shape):
+    """
+        Returns the siamese model by the input shape.
+        :param input_shape: the shape of the input.
+        :return: a siamese model
+    """
     # Define the tensors for the two input images
     left_input = Input(input_shape)
     right_input = Input(input_shape)
@@ -53,69 +59,12 @@ def get_siamese_model(input_shape):
     return siamese_net
 
 
-def get_simple_model(input_shape):
-    # model = ResNet50(include_top=False, pooling='avg', weights='imagenet', input_shape=input_shape)
-    # x = model.output
-    # x = Dense(2048, activation="relu")(x)
-    # x = Dropout(0.5)(x)
-    # x = Dense(1024, activation="softmax")(x)
-    # model = Model(inputs=model.input, outputs=x)
-    # Instantiate an empty model
-    model = Sequential()
-
-    # 1st Convolutional Layer
-    model.add(Conv2D(filters=96, input_shape=input_shape, kernel_size=(11, 11), strides=(4, 4)))
-    model.add(BatchNormalization())
-    model.add(Activation("relu"))
-    # Max Pooling
-    model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
-
-    # 2nd Convolutional Layer
-    model.add(Conv2D(filters=256, kernel_size=(11, 11), strides=(1, 1)))
-    model.add(BatchNormalization())
-    model.add(Activation("relu"))
-    # Max Pooling
-    model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
-
-    # 3rd Convolutional Layer
-    model.add(Conv2D(filters=384, kernel_size=(3, 3), strides=(1, 1)))
-    model.add(BatchNormalization())
-    model.add(Activation("relu"))
-
-    # 4th Convolutional Layer
-    model.add(Conv2D(filters=384, kernel_size=(3, 3), strides=(1, 1)))
-    model.add(BatchNormalization())
-    model.add(Activation("relu"))
-
-    # 5th Convolutional Layer
-    model.add(Conv2D(filters=256, kernel_size=(3, 3), strides=(1, 1)))
-    model.add(BatchNormalization())
-    model.add(Activation("relu"))
-    # Max Pooling
-    model.add(MaxPooling2D(pool_size=(2, 2), strides=(2, 2)))
-
-    # Passing it to a Fully Connected layer
-    model.add(Flatten())
-    # 1st Fully Connected Layer
-    model.add(Dense(4096))
-    model.add(Activation("relu"))
-    # Add Dropout to prevent overfitting
-    model.add(Dropout(0.4))
-
-    # 2nd Fully Connected Layer
-    model.add(Dense(4096))
-    model.add(Activation("relu"))
-    # Add Dropout
-    model.add(Dropout(0.4))
-
-    # 3rd Fully Connected Layer
-    model.add(Dense(1000))
-    model.add(Activation("sigmoid"))
-
-    return model
-
-
 def get_cnn_model(input_shape):
+    """
+    Returns a CNN model.
+    :param input_shape: the shape of the input.
+    :return: a CNN model.
+    """
     # Convolutional Neural Network
     model = Sequential()
     # 1st Convolutional Layer
@@ -156,6 +105,11 @@ def get_cnn_model(input_shape):
 
 
 def get_vgg_model(input_shape):
+    """
+    Returns a VGG16 based model.
+    :param input_shape: the shape of the input.
+    :return: a VGG16 based model.
+    """
     vgg16 = VGG16(include_top=False, weights='imagenet', pooling='max', input_shape=input_shape)
     for layer in vgg16.layers[:-3]:
         layer.trainable = False
@@ -169,6 +123,11 @@ def get_vgg_model(input_shape):
 
 
 def load_image(path):
+    """
+    Loads and return the image in the input path as binary array.
+    :param path: the path of the image.
+    :return: the image in the input path as binary array.
+    """
     image = Image.open(path)
     data = asarray(image)
     # data = cv2.imread(path)
@@ -176,6 +135,12 @@ def load_image(path):
 
 
 def get_image_data(name, num):
+    """
+    Loads and return the image specified by name and num as binary array.
+    :param name: name of the image person face.
+    :param num: number of image.
+    :return: he image specified by name and num as binary array.
+    """
     digits_to_add = 4 - len(num)
     for i in range(0, digits_to_add):
         num = '0' + num
@@ -186,7 +151,11 @@ def get_image_data(name, num):
 
 
 def load_dataset(dataset_type):
-    # consider reading all lines and shuffle them..
+    """
+    Loads and return the dataset specified in the input(train/test).
+    :param dataset_type: the dataset to be loaded (train/test).
+    :return: the dataset specified in the input(train/test) as [x1_data, x2_data], y_data.
+    """
     x1_data = []
     x2_data = []
     y_data = []
@@ -198,13 +167,13 @@ def load_dataset(dataset_type):
         line = line.split()
         y = 0
         if len(line) == 3:
-            x1_data.append(get_image_data(name=line[0], num=line[1]))
-            x2_data.append(get_image_data(name=line[0], num=line[2]))
+            x1_data.append(np.expand_dims(get_image_data(name=line[0], num=line[1]), axis=2))
+            x2_data.append(np.expand_dims(get_image_data(name=line[0], num=line[2]), axis=2))
             y = 1
             y_data.append(y)
         elif len(line) == 4:
-            x1_data.append(get_image_data(name=line[0], num=line[1]))
-            x2_data.append(get_image_data(name=line[2], num=line[3]))
+            x1_data.append(np.expand_dims(get_image_data(name=line[0], num=line[1]), axis=2))
+            x2_data.append(np.expand_dims(get_image_data(name=line[2], num=line[3]), axis=2))
             y_data.append(y)
     file.close()
     return [x1_data, x2_data], y_data
@@ -213,7 +182,11 @@ def load_dataset(dataset_type):
 def main():
     np.random.seed(64)
 
-    # Local
+    # Load local files dataset (same directory )
+    x_train, y_train = load_dataset(dataset_type="train")
+    x_test, y_test = load_dataset(dataset_type="test")
+
+    # with pickle files
     # with open('trainShuffled.pickle', 'rb') as f:
     #     x_train, y_train = pickle.load(f)
     # with open('test.pickle', 'rb') as f:
@@ -225,25 +198,49 @@ def main():
     # with open('/content/drive/My Drive/test.pickle', 'rb') as f:
     #     x_test, y_test = pickle.load(f)
 
-    # x1_train, x1_val, y1, y2 = train_test_split(x_train[0], y_train, test_size=0.2, random_state=1)
-    # x2_train, x2_val, y_train, y_val = train_test_split(x_train[1], y_train, test_size=0.2, random_state=1)
-    # x_train = [x1_train, x2_train]
-    # x_val = [x1_val, x2_val]
+    # split train data to train and validation sets.
+    x1_train, x1_val, y1, y2 = train_test_split(x_train[0], y_train, test_size=0.2, random_state=1)
+    x2_train, x2_val, y_train, y_val = train_test_split(x_train[1], y_train, test_size=0.2, random_state=1)
+    x_train = [x1_train, x2_train]
+    x_val = [x1_val, x2_val]
+
     model = get_siamese_model((250, 250, 1))
     # load model
     # model = load_model('model.h5')
     # model.load_weights('my_model_weights.h5')
     # model.summary()
-    # optimizer = Adam(lr=0.00006)
-    # model.compile(loss="binary_crossentropy", optimizer=optimizer, metrics=['accuracy'])
-    # hist = model.fit(x_train, y_train, batch_size=32, epochs=10, validation_data=(x_val, y_val))
+    optimizer = Adam(lr=0.00006)
+    model.compile(loss="binary_crossentropy", optimizer=optimizer, metrics=['accuracy'])
+    history = model.fit(x_train, y_train, batch_size=32, epochs=10, validation_data=(x_val, y_val))
     # model.save_weights('my_model_weights.h5')
-    # score = model.evaluate(x_test, y_test, batch_size=32)
-    # print(score)
+
+    # Plot training & validation accuracy values
+    plt.plot(history.history['accuracy'])
+    plt.plot(history.history['val_accuracy'])
+    plt.title('Model accuracy')
+    plt.ylabel('Accuracy')
+    plt.xlabel('Epoch')
+    plt.legend(['Train', 'Test'], loc='upper left')
+    plt.show()
+
+    # Plot training & validation loss values
+    plt.plot(history.history['loss'])
+    plt.plot(history.history['val_loss'])
+    plt.title('Model loss')
+    plt.ylabel('Loss')
+    plt.xlabel('Epoch')
+    plt.legend(['Train', 'Test'], loc='upper left')
+    plt.show()
+    score = model.evaluate(x_test, y_test, batch_size=32)
+    print(score)
     # predict_pairs(model)
 
 
 def predict_pairs(model):
+    """
+    Predicts and prints prediction iteratively on the test set.
+    :param model: the model used to predict.
+    """
     x1_data = []
     x2_data = []
     file_path = "dataset" + path_separator + "test" + ".txt"
