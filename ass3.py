@@ -10,43 +10,6 @@ path_separator = os.path.sep
 num_words = 300
 
 
-def load_word_embedding():
-    # Load in embeddings
-    glove_vectors = '/home/ubuntu/.keras/datasets/glove.6B.300d.txt'
-    glove = np.loadtxt(glove_vectors, dtype='str', comments=None)
-
-    # Extract the vectors and words
-    vectors = glove[:, 1:].astype('float')
-    words = glove[:, 0]
-
-    # Create lookup of words to vectors
-    word_lookup = {word: vector for word, vector in zip(words, vectors)}
-
-    # New matrix to hold word embeddings
-    embedding_matrix = np.zeros((num_words, vectors.shape[1]))
-
-    # for i, word in enumerate(word_idx.keys()):
-        # Look up the word embedding
-        # vector = word_lookup.get(word, None)
-
-        # Record in matrix
-        # if vector is not None:
-        #     embedding_matrix[i + 1, :] = vector
-
-    # return embedding_matrix
-
-
-def get_embeddings_dict():
-    embeddings_dict = {}
-    glove_path = "ass3_data" + path_separator + "glove.6B.300d.txt"
-    with open(glove_path, 'r') as f:
-        for line in f:
-            values = line.split()
-            word = values[0]
-            vector = np.asarray(values[1:], "float32")
-            embeddings_dict[word] = vector
-    return embeddings_dict
-
 def get_LSTM_model():
     training_length = 50
     embedding_matrix = []
@@ -76,6 +39,18 @@ def get_LSTM_model():
 
     # Output layer
     model.add(Dense(num_words, activation='softmax'))
+
+
+def get_embeddings_dict():
+    embeddings_dict = {}
+    glove_path = "ass3_data" + path_separator + "glove.6B.300d.txt"
+    with open(glove_path, 'r') as f:
+        for line in f:
+            values = line.split()
+            word = values[0]
+            vector = np.asarray(values[1:], "float32")
+            embeddings_dict[word] = vector
+    return embeddings_dict
 
 
 def main():
