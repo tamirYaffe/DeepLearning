@@ -9,10 +9,9 @@ import csv
 from keras_preprocessing.text import Tokenizer
 
 path_separator = os.path.sep
-num_words = 300
 
 
-def get_LSTM_model():
+def get_LSTM_model(num_words):
     training_length = 50
     embedding_matrix = []
     model = Sequential()
@@ -44,14 +43,25 @@ def get_LSTM_model():
 
 
 def get_embeddings_dict():
-    embeddings_dict = {}
-    glove_path = "ass3_data" + path_separator + "glove.6B.300d.txt"
-    with open(glove_path, 'r') as f:
-        for line in f:
-            values = line.split()
-            word = values[0]
-            vector = np.asarray(values[1:], "float32")
-            embeddings_dict[word] = vector
+    # embeddings_dict = {}
+    # glove_path = "ass3_data" + path_separator + "glove.6B.300d.txt"
+    # with open(glove_path, 'r') as f:
+    #     for line in f:
+    #         values = line.split()
+    #         word = values[0]
+    #         vector = np.asarray(values[1:], "float32")
+    #         embeddings_dict[word] = vector
+
+    # saving glove dictionary to pickle file for faster loading.
+    # embeddings_dict = get_embeddings_dict()
+    # with open('embeddings_dict.pickle', 'wb') as f:
+    #     pickle.dump(embeddings_dict, f)
+
+    # load glove dictionary from saved pickle file, for faster loading.
+    embeddings_dict_path = "ass3_data" + path_separator + "embeddings_dict.pickle"
+    with open(embeddings_dict_path, 'rb') as f:
+        embeddings_dict = pickle.load(f)
+
     return embeddings_dict
 
 
@@ -78,28 +88,37 @@ def convert_words_to_integers(data):
     tokenizer.fit_on_texts(data)
     vocab_size = len(tokenizer.word_index) + 1
     # integer encode the data
-    encoded_data = tokenizer.texts_to_sequences(songs_lyrics)
+    encoded_data = tokenizer.texts_to_sequences(data)
     idx_word = tokenizer.index_word
     return encoded_data, idx_word, vocab_size
 
+
+def create_embedding_matrix(vocab_size, word_index, embeddings_dict):
+    embedding_matrix = np.zeros((vocab_size, 300))
+    for i, word in word_index.items():
+        embedding_vector = embeddings_dict.get(word)
+        if embedding_vector is not None:
+            embedding_matrix[i] = embedding_vector
+    return embedding_matrix
+
+
 def main():
-    # pm = pretty_midi.PrettyMIDI('2_Unlimited_-_Get_Ready_for_This.mid')
 
-    # saving glove dictionary to pickle file for faster loading.
-    # embeddings_dict = get_embeddings_dict()
-    # with open('embeddings_dict.pickle', 'wb') as f:
-    #     pickle.dump(embeddings_dict, f)
+    # get embeddings_dictionary
+    embeddings_dict = get_embeddings_dict()
 
-    # load glove dictionary from saved pickle file, for faster loading.
-    embeddings_dict_path = "ass3_data" + path_separator + "embeddings_dict.pickle"
-    with open(embeddings_dict_path, 'rb') as f:
-        embeddings_dict = pickle.load(f)
+    # load dataset
+    songs_artists, songs_names, songs_lyrics = load_data_set("test")
+
+    # tokenize the lyrics
+    encoded_data, word_index, vocab_size = convert_words_to_integers(songs_lyrics)
+
+    # create a weight matrix for words in training docs
+    embedding_matrix = create_embedding_matrix(vocab_size, word_index, embeddings_dict)
     pass
 
 
 if __name__ == '__main__':
     start_time = time.time()
-    # main()
-    songs_artists, songs_names, songs_lyrics = load_data_set("test")
-    encoded_data, idx_word, vocab_size = convert_words_to_integers(songs_lyrics)
+    main()
     print("--- %s seconds ---" % (time.time() - start_time))
