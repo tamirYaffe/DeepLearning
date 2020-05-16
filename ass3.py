@@ -5,6 +5,8 @@ from keras.models import Sequential
 from keras.layers import LSTM, Dense, Dropout, Masking, Embedding
 import numpy as np
 import pickle
+import csv
+from keras_preprocessing.text import Tokenizer
 
 path_separator = os.path.sep
 num_words = 300
@@ -53,6 +55,33 @@ def get_embeddings_dict():
     return embeddings_dict
 
 
+def load_data_set(data_type):
+    songs_artists = []
+    songs_names = []
+    songs_lyrics = []
+    train_path = "ass3_data" + path_separator + "lyrics_" + data_type + "_set.csv"
+    with open(train_path, newline='') as csvfile:
+        lines = csv.reader(csvfile, delimiter=',', quotechar='|')
+        for row in lines:
+            songs_artists.append(row[0])
+            songs_names.append(row[1])
+            songs_lyrics.append(row[2])
+    return songs_artists, songs_names, songs_lyrics
+
+
+def convert_words_to_integers(data):
+    # prepare tokenizer
+    tokenizer = Tokenizer(num_words=None,
+                          filters='!"#$%&()*+,-./:;<=>?@[\\]^_`{|}~\t\n',
+                          lower=True,
+                          split=' ')
+    tokenizer.fit_on_texts(data)
+    vocab_size = len(tokenizer.word_index) + 1
+    # integer encode the data
+    encoded_data = tokenizer.texts_to_sequences(songs_lyrics)
+    idx_word = tokenizer.index_word
+    return encoded_data, idx_word, vocab_size
+
 def main():
     # pm = pretty_midi.PrettyMIDI('2_Unlimited_-_Get_Ready_for_This.mid')
 
@@ -68,8 +97,9 @@ def main():
     pass
 
 
-
 if __name__ == '__main__':
     start_time = time.time()
-    main()
+    # main()
+    songs_artists, songs_names, songs_lyrics = load_data_set("test")
+    encoded_data, idx_word, vocab_size = convert_words_to_integers(songs_lyrics)
     print("--- %s seconds ---" % (time.time() - start_time))
