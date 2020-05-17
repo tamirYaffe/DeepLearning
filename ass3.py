@@ -8,6 +8,7 @@ import pickle
 import csv
 from keras_preprocessing.text import Tokenizer
 from sklearn.model_selection import train_test_split
+from keras.callbacks import EarlyStopping, ModelCheckpoint
 
 path_separator = os.path.sep
 
@@ -199,6 +200,17 @@ def main():
     model.summary()
 
     model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+
+    # Create callbacks
+    callbacks = [
+        EarlyStopping(monitor='val_loss', patience=5),
+        ModelCheckpoint(filepath='model.{epoch:02d}-{val_loss:.2f}.h5', save_best_only=True, save_weights_only=True)
+    ]
+
+    history = model.fit(x_train, y_train,
+                        batch_size=2048, epochs=150,
+                        callbacks=callbacks,
+                        validation_data=(x_val, y_val))
     pass
 
 
