@@ -42,36 +42,47 @@ def get_LSTM_model(num_words):
     model.add(Dense(num_words, activation='softmax'))
 
 
-def get_embeddings_dict():
-    # embeddings_dict = {}
-    # glove_path = "ass3_data" + path_separator + "glove.6B.300d.txt"
-    # with open(glove_path, 'r') as f:
-    #     for line in f:
-    #         values = line.split()
-    #         word = values[0]
-    #         vector = np.asarray(values[1:], "float32")
-    #         embeddings_dict[word] = vector
-
-    # saving glove dictionary to pickle file for faster loading.
-    # embeddings_dict = get_embeddings_dict()
-    # with open('embeddings_dict.pickle', 'wb') as f:
-    #     pickle.dump(embeddings_dict, f)
-
-    # load glove dictionary from saved pickle file, for faster loading.
+def get_embeddings_dict(load_pickle):
+    embeddings_dict = {}
     embeddings_dict_path = "ass3_data" + path_separator + "embeddings_dict.pickle"
-    with open(embeddings_dict_path, 'rb') as f:
-        embeddings_dict = pickle.load(f)
+
+    if load_pickle:
+        # load from saved pickle file, for faster loading.
+        embeddings_dict_path = "ass3_data" + path_separator + "embeddings_dict.pickle"
+        with open(embeddings_dict_path, 'rb') as f:
+            embeddings_dict = pickle.load(f)
+        return embeddings_dict
+
+    glove_path = "ass3_data" + path_separator + "glove.6B.300d.txt"
+    with open(glove_path, 'r') as f:
+        for line in f:
+            values = line.split()
+            word = values[0]
+            vector = np.asarray(values[1:], "float32")
+            embeddings_dict[word] = vector
+
+    # saving to pickle file for faster loading.
+    with open(embeddings_dict_path, 'wb') as f:
+        pickle.dump(embeddings_dict, f)
 
     return embeddings_dict
 
 
-def load_data_set(data_type):
-    min_length = 10000
-    max_length = 0
-    sum_of_length = 0
+def load_data_set(data_type, load_pickle):
     songs_artists = []
     songs_names = []
     songs_lyrics = []
+    pickle_file_path = "ass3_data" + path_separator + data_type + ".pickle"
+
+    if load_pickle:
+        # load from saved pickle file, for faster loading.
+        with open(pickle_file_path, 'rb') as f:
+            songs_artists, songs_names, songs_lyrics = pickle.load(f)
+        return songs_artists, songs_names, songs_lyrics
+
+    min_length = 10000
+    max_length = 0
+    sum_of_length = 0
     train_path = "ass3_data" + path_separator + "lyrics_" + data_type + "_set.csv"
     with open(train_path, newline='') as csvfile:
         lines = csv.reader(csvfile, delimiter=',', quotechar='|')
@@ -88,6 +99,11 @@ def load_data_set(data_type):
     print("min length song: %s" % min_length)
     print("max length song: %s" % max_length)
     print("avg length song: %s" % (sum_of_length/len(songs_lyrics)))
+
+    # saving to pickle file for faster loading.
+    with open(pickle_file_path, 'wb') as f:
+        pickle.dump([songs_artists, songs_names, songs_lyrics], f)
+
     return songs_artists, songs_names, songs_lyrics
 
 
@@ -143,10 +159,10 @@ def separate_data(encoded_data, vocab_size):
 def main():
 
     # get embeddings_dictionary
-    embeddings_dict = get_embeddings_dict()
+    embeddings_dict = get_embeddings_dict(load_pickle=True)
 
     # load dataset
-    songs_artists, songs_names, songs_lyrics = load_data_set("test")
+    songs_artists, songs_names, songs_lyrics = load_data_set(data_type="test", load_pickle=True)
 
     # tokenize the lyrics
     encoded_data, word_index, vocab_size = convert_words_to_integers(songs_lyrics)
