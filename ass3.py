@@ -99,7 +99,7 @@ def load_data_set(data_type, load_pickle):
             sum_of_length = sum_of_length + length
     print("min length song: %s" % min_length)
     print("max length song: %s" % max_length)
-    print("avg length song: %s" % (sum_of_length/len(songs_lyrics)))
+    print("avg length song: %s" % (sum_of_length / len(songs_lyrics)))
 
     # saving to pickle file for faster loading.
     with open(pickle_file_path, 'wb') as f:
@@ -155,6 +155,21 @@ def separate_data(encoded_data, vocab_size, training_length):
     return features, one_shot_labels
 
 
+def prepare_data(encoded_data, train_size, vocab_size, training_length):
+    # split data to train and test
+    train_encoded_data, test_encoded_data = encoded_data[:train_size], encoded_data[train_size:]
+
+    # separate encoded_data into multiple examples of input (X) and output (y).
+    x_train, y_train = separate_data(train_encoded_data, vocab_size, training_length)
+    x_test, y_test = separate_data(test_encoded_data, vocab_size, training_length)
+    # label to word: word_index[np.argmax(Y[0])
+
+    # split train to train and validation
+    x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=0.2, random_state=1)
+
+    return x_train, x_val, x_test, y_train, y_val, y_test
+
+
 def main():
     training_length = 50
 
@@ -173,19 +188,12 @@ def main():
     # tokenize the lyrics
     encoded_data, word_index, vocab_size = convert_words_to_integers(all_songs_lyrics)
 
-    # split data to train and test
-    train_encoded_data, test_encoded_data = encoded_data[:len(train_songs_lyrics)], encoded_data[len(train_songs_lyrics):]
-
-    # create a weight matrix for words in training docs
+    # create a weight matrix for lyrics words.
     embedding_matrix = create_embedding_matrix(vocab_size, word_index, embeddings_dict)
 
-    # separate encoded_data into input (X) and output (y).
-    x_train, y_train = separate_data(train_encoded_data, vocab_size, training_length)
-    x_test, y_test = separate_data(test_encoded_data, vocab_size, training_length)
-    # label to word: word_index[np.argmax(Y[0])
-
-    # split train to train and validation
-    x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=0.2, random_state=1)
+    # prepare data for the model.
+    x_train, x_val, x_test, y_train, y_val, y_test = prepare_data(encoded_data, len(train_songs_lyrics), vocab_size,
+                                                                  training_length)
 
     model = get_LSTM_model(vocab_size, training_length, embedding_matrix)
     model.summary()
