@@ -66,6 +66,9 @@ def get_embeddings_dict():
 
 
 def load_data_set(data_type):
+    min_length = 10000
+    max_length = 0
+    sum_of_length = 0
     songs_artists = []
     songs_names = []
     songs_lyrics = []
@@ -76,6 +79,15 @@ def load_data_set(data_type):
             songs_artists.append(row[0])
             songs_names.append(row[1])
             songs_lyrics.append(row[2])
+            length = len(row[2])
+            if length < min_length:
+                min_length = length
+            if length > max_length:
+                max_length = length
+            sum_of_length = sum_of_length + length
+    print("min length song: %s" % min_length)
+    print("max length song: %s" % max_length)
+    print("avg length song: %s" % (sum_of_length/len(songs_lyrics)))
     return songs_artists, songs_names, songs_lyrics
 
 
@@ -108,13 +120,16 @@ def main():
     embeddings_dict = get_embeddings_dict()
 
     # load dataset
-    songs_artists, songs_names, songs_lyrics = load_data_set("test")
+    songs_artists, songs_names, songs_lyrics = load_data_set("train")
 
     # tokenize the lyrics
     encoded_data, word_index, vocab_size = convert_words_to_integers(songs_lyrics)
 
     # create a weight matrix for words in training docs
     embedding_matrix = create_embedding_matrix(vocab_size, word_index, embeddings_dict)
+
+    # separate encoded_data into input (X) and output (y).
+
     pass
 
 
