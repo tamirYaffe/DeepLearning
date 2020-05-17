@@ -50,7 +50,6 @@ def get_embeddings_dict(load_pickle):
 
     if load_pickle:
         # load from saved pickle file, for faster loading.
-        embeddings_dict_path = "ass3_data" + path_separator + "embeddings_dict.pickle"
         with open(embeddings_dict_path, 'rb') as f:
             embeddings_dict = pickle.load(f)
         return embeddings_dict
