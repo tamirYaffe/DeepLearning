@@ -114,13 +114,39 @@ def create_embedding_matrix(vocab_size, word_index, embeddings_dict):
     return embedding_matrix
 
 
+def separate_data(encoded_data, vocab_size):
+    features = []
+    labels = []
+
+    training_length = 50
+
+    for seq in encoded_data:
+
+        # Create multiple training examples from each sequence
+        for i in range(training_length, len(seq)):
+            # Extract the features and label
+            extract = seq[i - training_length:i + 1]
+
+            # Set the features and label
+            features.append(extract[:-1])
+            labels.append(extract[-1])
+
+    features = np.array(features)
+
+    # make labels into one shot vectors
+    one_shot_labels = np.zeros((len(features), vocab_size), dtype=np.int8)
+    for i, word in enumerate(labels):
+        one_shot_labels[i, word] = 1
+    return features, one_shot_labels
+
+
 def main():
 
     # get embeddings_dictionary
     embeddings_dict = get_embeddings_dict()
 
     # load dataset
-    songs_artists, songs_names, songs_lyrics = load_data_set("train")
+    songs_artists, songs_names, songs_lyrics = load_data_set("test")
 
     # tokenize the lyrics
     encoded_data, word_index, vocab_size = convert_words_to_integers(songs_lyrics)
@@ -129,7 +155,7 @@ def main():
     embedding_matrix = create_embedding_matrix(vocab_size, word_index, embeddings_dict)
 
     # separate encoded_data into input (X) and output (y).
-
+    features, labels = separate_data(encoded_data, vocab_size)  # label to word: word_index[np.argmax(labels[0])
     pass
 
 
