@@ -7,20 +7,19 @@ import numpy as np
 import pickle
 import csv
 from keras_preprocessing.text import Tokenizer
+from sklearn.model_selection import train_test_split
 
 path_separator = os.path.sep
 
 
-def get_LSTM_model(num_words):
-    training_length = 50
-    embedding_matrix = []
+def get_LSTM_model(num_words, training_length, embedding_matrix):
     model = Sequential()
 
     # Embedding layer
     model.add(
         Embedding(input_dim=num_words,
                   input_length=training_length,
-                  output_dim=100,
+                  output_dim=300,
                   weights=[embedding_matrix],
                   trainable=False,
                   mask_zero=True))
@@ -40,6 +39,8 @@ def get_LSTM_model(num_words):
 
     # Output layer
     model.add(Dense(num_words, activation='softmax'))
+
+    return model
 
 
 def get_embeddings_dict(load_pickle):
@@ -130,11 +131,9 @@ def create_embedding_matrix(vocab_size, word_index, embeddings_dict):
     return embedding_matrix
 
 
-def separate_data(encoded_data, vocab_size):
+def separate_data(encoded_data, vocab_size, training_length):
     features = []
     labels = []
-
-    training_length = 50
 
     for seq in encoded_data:
 
@@ -157,21 +156,41 @@ def separate_data(encoded_data, vocab_size):
 
 
 def main():
+    training_length = 50
 
     # get embeddings_dictionary
     embeddings_dict = get_embeddings_dict(load_pickle=True)
 
     # load dataset
-    songs_artists, songs_names, songs_lyrics = load_data_set(data_type="test", load_pickle=True)
+    train_songs_artists, train_songs_names, train_songs_lyrics = load_data_set(data_type="train", load_pickle=True)
+    test_songs_artists, test_songs_names, test_songs_lyrics = load_data_set(data_type="test", load_pickle=True)
+
+    # concat all lyrics
+    all_songs_lyrics = []
+    all_songs_lyrics.extend(train_songs_lyrics)
+    all_songs_lyrics.extend(test_songs_lyrics)
 
     # tokenize the lyrics
-    encoded_data, word_index, vocab_size = convert_words_to_integers(songs_lyrics)
+    encoded_data, word_index, vocab_size = convert_words_to_integers(all_songs_lyrics)
+
+    # split data to train and test
+    train_encoded_data, test_encoded_data = encoded_data[:len(train_songs_lyrics)], encoded_data[len(train_songs_lyrics):]
 
     # create a weight matrix for words in training docs
     embedding_matrix = create_embedding_matrix(vocab_size, word_index, embeddings_dict)
 
     # separate encoded_data into input (X) and output (y).
-    features, labels = separate_data(encoded_data, vocab_size)  # label to word: word_index[np.argmax(labels[0])
+    x_train, y_train = separate_data(train_encoded_data, vocab_size, training_length)
+    x_test, y_test = separate_data(test_encoded_data, vocab_size, training_length)
+    # label to word: word_index[np.argmax(Y[0])
+
+    # split train to train and validation
+    x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=0.2, random_state=1)
+
+    model = get_LSTM_model(vocab_size, training_length, embedding_matrix)
+    model.summary()
+
+    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
     pass
 
 
