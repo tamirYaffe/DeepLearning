@@ -1,15 +1,18 @@
+from random import randint
 import pretty_midi
 import os
 import time
 from keras.models import Sequential
-from keras.layers import LSTM, Dense, Dropout, Masking, Embedding
+from keras.layers import LSTM, Dense, Dropout, Masking, Embedding, CuDNNLSTM
 import numpy as np
 import pickle
 import csv
+
+from keras.preprocessing.sequence import pad_sequences
 from keras_preprocessing.text import Tokenizer
 from sklearn.model_selection import train_test_split
 from keras.callbacks import EarlyStopping, ModelCheckpoint
-
+from numpy.random import choice
 path_separator = os.path.sep
 
 
@@ -26,11 +29,16 @@ def get_LSTM_model(num_words, training_length, embedding_matrix):
                   mask_zero=True))
 
     # Masking layer for pre-trained embeddings
-    model.add(Masking(mask_value=0.0))
+    model.add(Masking(mask_value=0.0))  # output shape is [none, 50, 300]
+
+    # add melody features to the current 300 features
+    # tf.keras.layers.Concatenate(axis=0)([x, y])
 
     # Recurrent layer
     model.add(LSTM(64, return_sequences=False,
                    dropout=0.1, recurrent_dropout=0.1))
+    # model.add(CuDNNLSTM(64, return_sequences=False))
+    # model.add(Dropout(0.1))
 
     # Fully connected layer
     model.add(Dense(64, activation='relu'))
@@ -119,7 +127,7 @@ def convert_words_to_integers(data):
     # integer encode the data
     encoded_data = tokenizer.texts_to_sequences(data)
     idx_word = tokenizer.index_word
-    return encoded_data, idx_word, vocab_size
+    return encoded_data, idx_word, vocab_size, tokenizer
 
 
 def create_embedding_matrix(vocab_size, word_index, embeddings_dict):
@@ -170,6 +178,56 @@ def prepare_data(encoded_data, train_size, vocab_size, training_length):
     return x_train, x_val, x_test, y_train, y_val, y_test
 
 
+def generate_seq(model, tokenizer, seq_length, seed_text, n_words, encoded):
+    result = list()
+    result.append(seed_text)
+    in_text = seed_text
+    # generate a fixed number of words
+    for _ in range(n_words-1):
+        # encode the text as integer
+        # encoded = tokenizer.texts_to_sequences([in_text])[0]
+        # truncate sequences to a fixed length
+        # encoded = pad_sequences([encoded], maxlen=seq_length, truncating='pre')
+        # encoded_test = np.zeros(seq_length)
+        # encoded_test[seq_length-1] = encoded_word
+        # encoded_test = encoded_test.reshape((1, len(encoded_test)))
+        # predict probabilities for each word
+        # yhat = model.predict_classes(encoded, verbose=0)
+        prediction = model.predict(encoded)
+        prediction = prediction.reshape(prediction.size)
+        indecies = np.arange(prediction.size)
+        draw = choice(indecies, 1, p=prediction)
+        # map predicted word index to word
+        out_word = ''
+        for word, index in tokenizer.word_index.items():
+            if index == draw:
+                out_word = word
+                break
+        # append to input
+        encoded.reshape(encoded.size)
+        encoded = np.c_[encoded, draw]
+        encoded = np.delete(encoded, 1, 1)
+        encoded.reshape((1, encoded.size))
+        # in_text += ' ' + out_word
+        result.append(out_word)
+    return ' '.join(result)
+
+
+def generate_song_lyrics(word_index, training_length, model, tokenizer):
+    # select a seed text
+    # seed_text = all_songs_lyrics[randint(0, len(all_songs_lyrics))]
+    seed_encode_word = randint(0, len(word_index))
+    seed_text = word_index[seed_encode_word]
+    encoded_test = np.zeros(training_length)
+    encoded_test[training_length - 1] = seed_encode_word
+    encoded_test = encoded_test.reshape((1, len(encoded_test)))
+    print(seed_text + '\n')
+
+    # generate new text
+    generated = generate_seq(model, tokenizer, training_length, seed_text, training_length, encoded_test)
+    print(generated)
+
+
 def main():
     training_length = 50
 
@@ -186,7 +244,7 @@ def main():
     all_songs_lyrics.extend(test_songs_lyrics)
 
     # tokenize the lyrics
-    encoded_data, word_index, vocab_size = convert_words_to_integers(all_songs_lyrics)
+    encoded_data, word_index, vocab_size, tokenizer = convert_words_to_integers(all_songs_lyrics)
 
     # create a weight matrix for lyrics words.
     embedding_matrix = create_embedding_matrix(vocab_size, word_index, embeddings_dict)
@@ -206,11 +264,17 @@ def main():
         ModelCheckpoint(filepath='model.{epoch:02d}-{val_loss:.2f}.h5', save_best_only=True, save_weights_only=True)
     ]
 
-    history = model.fit(x_train, y_train,
-                        batch_size=2048, epochs=150,
-                        callbacks=callbacks,
-                        validation_data=(x_val, y_val))
-    pass
+    # history = model.fit(x_train, y_train,
+    #                     batch_size=2048, epochs=150,
+    #                     callbacks=callbacks,
+    #                     validation_data=(x_val, y_val))
+
+    model.load_weights("ass3_data" + path_separator + 'model_weights.h5')
+    # score = model.evaluate(x_test, y_test, batch_size=2048)
+    # print(score)
+
+    generate_song_lyrics(word_index, training_length, model, tokenizer)
+
 
 
 if __name__ == '__main__':
