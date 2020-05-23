@@ -13,6 +13,7 @@ from keras_preprocessing.text import Tokenizer
 from sklearn.model_selection import train_test_split
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 from numpy.random import choice
+
 path_separator = os.path.sep
 
 
@@ -142,9 +143,11 @@ def create_embedding_matrix(vocab_size, word_index, embeddings_dict):
 def separate_data(encoded_data, vocab_size, training_length):
     features = []
     labels = []
-
+    melody_features = []
     for seq in encoded_data:
-
+        # todo: remember number of sub seq for each line in encoded_data or compute it before
+        for j in len(seq) - training_length:
+            melody_features.append()
         # Create multiple training examples from each sequence
         for i in range(training_length, len(seq)):
             # Extract the features and label
@@ -183,7 +186,7 @@ def generate_seq(model, tokenizer, seq_length, seed_text, n_words, encoded):
     result.append(seed_text)
     in_text = seed_text
     # generate a fixed number of words
-    for _ in range(n_words-1):
+    for _ in range(n_words - 1):
         # encode the text as integer
         # encoded = tokenizer.texts_to_sequences([in_text])[0]
         # truncate sequences to a fixed length
@@ -228,6 +231,37 @@ def generate_song_lyrics(word_index, training_length, model, tokenizer):
     print(generated)
 
 
+def load_midi_files(load_pickle, songs_artists, songs_names):
+    all_songs_melodies = []
+    pickle_file_path = "ass3_data" + path_separator + "midi_files" + ".pickle"
+
+    if load_pickle:
+        # load from saved pickle file, for faster loading.
+        with open(pickle_file_path, 'rb') as f:
+            all_songs_melodies = pickle.load(f)
+        return all_songs_melodies
+
+    for i in range(len(songs_artists)):
+        midi_pretty_format = None
+        artist = songs_artists[i]
+        artist = artist.replace(" ", "_")
+        song_name = songs_names[i]
+        song_name = song_name.replace(" ", "_")
+        midi_file_path = "ass3_data" + path_separator + "midi_files" + path_separator + artist + "_-_" + song_name + \
+                         ".mid"
+        try:
+            midi_pretty_format = pretty_midi.PrettyMIDI(midi_file_path)
+        except:
+            print(midi_file_path)
+        all_songs_melodies.append(midi_pretty_format)
+
+    # saving to pickle file for faster loading.
+    with open(pickle_file_path, 'wb') as f:
+        pickle.dump(all_songs_melodies, f)
+
+    return all_songs_melodies
+
+
 def main():
     training_length = 50
 
@@ -243,38 +277,55 @@ def main():
     all_songs_lyrics.extend(train_songs_lyrics)
     all_songs_lyrics.extend(test_songs_lyrics)
 
+    # concat all artists
+    all_songs_artists = []
+    all_songs_artists.extend(train_songs_artists)
+    all_songs_artists.extend(test_songs_artists)
+
+    # concat all songs names
+    all_songs_names = []
+    all_songs_names.extend(train_songs_names)
+    all_songs_names.extend(test_songs_names)
+
+    # load midi files melodies
+    all_songs_melodies = load_midi_files(load_pickle=True,
+                                         songs_artists=all_songs_artists,
+                                         songs_names=all_songs_names)
+
     # tokenize the lyrics
-    encoded_data, word_index, vocab_size, tokenizer = convert_words_to_integers(all_songs_lyrics)
+    # encoded_data, word_index, vocab_size, tokenizer = convert_words_to_integers(all_songs_lyrics)
 
     # create a weight matrix for lyrics words.
-    embedding_matrix = create_embedding_matrix(vocab_size, word_index, embeddings_dict)
+    # embedding_matrix = create_embedding_matrix(vocab_size, word_index, embeddings_dict)
+
+    # extract melody features
+    # melody_features = extract_melody_features()
 
     # prepare data for the model.
-    x_train, x_val, x_test, y_train, y_val, y_test = prepare_data(encoded_data, len(train_songs_lyrics), vocab_size,
-                                                                  training_length)
+    # x_train, x_val, x_test, y_train, y_val, y_test = prepare_data(encoded_data, len(train_songs_lyrics), vocab_size,
+    #                                                               training_length)
 
-    model = get_LSTM_model(vocab_size, training_length, embedding_matrix)
-    model.summary()
+    # model = get_LSTM_model(vocab_size, training_length, embedding_matrix)
+    # model.summary()
 
-    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+    # model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
 
     # Create callbacks
-    callbacks = [
-        EarlyStopping(monitor='val_loss', patience=5),
-        ModelCheckpoint(filepath='model.{epoch:02d}-{val_loss:.2f}.h5', save_best_only=True, save_weights_only=True)
-    ]
+    # callbacks = [
+    #     EarlyStopping(monitor='val_loss', patience=5),
+    #     ModelCheckpoint(filepath='model.{epoch:02d}-{val_loss:.2f}.h5', save_best_only=True, save_weights_only=True)
+    # ]
 
     # history = model.fit(x_train, y_train,
     #                     batch_size=2048, epochs=150,
     #                     callbacks=callbacks,
     #                     validation_data=(x_val, y_val))
 
-    model.load_weights("ass3_data" + path_separator + 'model_weights.h5')
+    # model.load_weights("ass3_data" + path_separator + 'model_weights.h5')
     # score = model.evaluate(x_test, y_test, batch_size=2048)
     # print(score)
 
-    generate_song_lyrics(word_index, training_length, model, tokenizer)
-
+    # generate_song_lyrics(word_index, training_length, model, tokenizer)
 
 
 if __name__ == '__main__':
