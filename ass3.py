@@ -246,6 +246,8 @@ def load_midi_files(load_pickle, songs_artists, songs_names):
         artist = songs_artists[i]
         artist = artist.replace(" ", "_")
         song_name = songs_names[i]
+        if song_name[0] is " ":
+            song_name = song_name[1:]
         song_name = song_name.replace(" ", "_")
         midi_file_path = "ass3_data" + path_separator + "midi_files" + path_separator + artist + "_-_" + song_name + \
                          ".mid"
@@ -260,6 +262,22 @@ def load_midi_files(load_pickle, songs_artists, songs_names):
         pickle.dump(all_songs_melodies, f)
 
     return all_songs_melodies
+
+
+def extract_melody_features(all_songs_melodies):
+    # the features for the melody are a vector of size 88 notes (0 or 1) and melody tempo total size of 89.
+    # note number to name can be found at https://newt.phys.unsw.edu.au/jw/notes.html
+    melody_features = np.zeros((605, 108))
+    for i in range(len(all_songs_melodies)):
+        melody = all_songs_melodies[i]
+        # features = np.zeros(108)
+        if melody is not None:
+            for instrument in melody.instruments:
+                for note in instrument.notes:
+                    if not melody_features[i][note.pitch-21]:
+                        melody_features[i][note.pitch-21] = 1
+            melody_features[i][107] = melody.estimate_tempo()
+    return melody_features
 
 
 def main():
@@ -292,14 +310,14 @@ def main():
                                          songs_artists=all_songs_artists,
                                          songs_names=all_songs_names)
 
+    # extract melody features
+    melody_features = extract_melody_features(all_songs_melodies)
+
     # tokenize the lyrics
     # encoded_data, word_index, vocab_size, tokenizer = convert_words_to_integers(all_songs_lyrics)
 
     # create a weight matrix for lyrics words.
     # embedding_matrix = create_embedding_matrix(vocab_size, word_index, embeddings_dict)
-
-    # extract melody features
-    # melody_features = extract_melody_features()
 
     # prepare data for the model.
     # x_train, x_val, x_test, y_train, y_val, y_test = prepare_data(encoded_data, len(train_songs_lyrics), vocab_size,
