@@ -17,13 +17,13 @@ from numpy.random import choice
 path_separator = os.path.sep
 
 
-def get_LSTM_model(num_words, training_length, embedding_matrix):
+def get_LSTM_model(num_words, seq_length, embedding_matrix):
     model = Sequential()
 
     # Embedding layer
     model.add(
         Embedding(input_dim=num_words,
-                  input_length=training_length,
+                  input_length=seq_length,
                   output_dim=300,
                   weights=[embedding_matrix],
                   trainable=False,
@@ -140,18 +140,14 @@ def create_embedding_matrix(vocab_size, word_index, embeddings_dict):
     return embedding_matrix
 
 
-def separate_data(encoded_data, vocab_size, training_length):
+def separate_data(encoded_data, vocab_size, seq_length):
     features = []
     labels = []
-    melody_features = []
     for seq in encoded_data:
-        # todo: remember number of sub seq for each line in encoded_data or compute it before
-        for j in len(seq) - training_length:
-            melody_features.append()
         # Create multiple training examples from each sequence
-        for i in range(training_length, len(seq)):
+        for i in range(seq_length, len(seq)):
             # Extract the features and label
-            extract = seq[i - training_length:i + 1]
+            extract = seq[i - seq_length:i + 1]
 
             # Set the features and label
             features.append(extract[:-1])
@@ -166,17 +162,19 @@ def separate_data(encoded_data, vocab_size, training_length):
     return features, one_shot_labels
 
 
-def prepare_data(encoded_data, train_size, vocab_size, training_length):
+def prepare_data(encoded_data, train_size, vocab_size, seq_length, val_data_percentage):
     # split data to train and test
     train_encoded_data, test_encoded_data = encoded_data[:train_size], encoded_data[train_size:]
 
     # separate encoded_data into multiple examples of input (X) and output (y).
-    x_train, y_train = separate_data(train_encoded_data, vocab_size, training_length)
-    x_test, y_test = separate_data(test_encoded_data, vocab_size, training_length)
+    x_train, y_train = separate_data(train_encoded_data, vocab_size, seq_length)
+    x_test, y_test = separate_data(test_encoded_data, vocab_size, seq_length)
     # label to word: word_index[np.argmax(Y[0])
 
     # split train to train and validation
-    x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=0.2, random_state=1)
+    # x_train, x_val, y_train, y_val = train_test_split(x_train, y_train, test_size=val_data_percentage, random_state=1)
+    x_train, x_val = train_val_split(train=x_train, val_data_percentage=val_data_percentage, random_seed=1)
+    y_train, y_val = train_val_split(train=y_train, val_data_percentage=val_data_percentage, random_seed=1)
 
     return x_train, x_val, x_test, y_train, y_val, y_test
 
@@ -264,24 +262,78 @@ def load_midi_files(load_pickle, songs_artists, songs_names):
     return all_songs_melodies
 
 
-def extract_melody_features(all_songs_melodies):
+def extract_melody_features(all_songs_melodies, total_dataset_size, seq_length, encoded_data):
     # the features for the melody are a vector of size 88 notes (0 or 1) and melody tempo total size of 89.
     # note number to name can be found at https://newt.phys.unsw.edu.au/jw/notes.html
-    melody_features = np.zeros((605, 108))
+
+    # extract features
+    melody_features = np.zeros((total_dataset_size, 108))
+    ctr = 0
     for i in range(len(all_songs_melodies)):
         melody = all_songs_melodies[i]
-        # features = np.zeros(108)
+        songs_lyric = encoded_data[i]
         if melody is not None:
             for instrument in melody.instruments:
                 for note in instrument.notes:
-                    if not melody_features[i][note.pitch-21]:
-                        melody_features[i][note.pitch-21] = 1
-            melody_features[i][107] = melody.estimate_tempo()
+                    for j in range(len(songs_lyric) - seq_length):
+                        melody_features[ctr+j][note.pitch-21] = 1
+            for j in range(len(songs_lyric) - seq_length):
+                melody_features[ctr+j][107] = melody.estimate_tempo()
+            ctr += len(songs_lyric) - seq_length
+            print(ctr)
+
     return melody_features
 
 
+def separate_melody_data(melody_features, songs_lyrics, seq_length):
+    melody_features_seq = melody_features[0]
+
+    songs_lyric = songs_lyrics[0]
+    for j in range(1, len(songs_lyric) - seq_length):
+        melody_features_seq = np.vstack((melody_features_seq, melody_features[0]))
+
+    for i in range(1, len(songs_lyrics)):
+        songs_lyric = songs_lyrics[i]
+        for j in range(len(songs_lyric) - seq_length):
+            melody_features_seq = np.vstack((melody_features_seq, melody_features[i]))
+    return melody_features_seq
+
+
+def train_val_split(train, val_data_percentage, random_seed):
+    np.random.seed(random_seed)
+    np.random.shuffle(train)
+    val_index = int(len(train)*val_data_percentage)
+    val, train = train[:val_index], train[val_index:]
+    return train, val
+
+
+def prepare_melody_data(train_size, val_data_percentage, all_songs_melodies, total_dataset_size, seq_length,
+                        encoded_data, load_pickle):
+    pickle_file_path = "ass3_data" + path_separator + "melody_data" + ".pickle"
+    if load_pickle:
+        # load from saved pickle file, for faster loading.
+        with open(pickle_file_path, 'rb') as f:
+            m_train, m_val, m_test = pickle.load(f)
+        return m_train, m_val, m_test
+
+    # extract melody features
+    melody_features = extract_melody_features(all_songs_melodies, total_dataset_size, seq_length, encoded_data)
+
+    # split data to train and test
+    m_train, m_test = melody_features[:train_size], melody_features[train_size:]
+
+    # split train to train and validation
+    m_train, m_val = train_val_split(train=m_train, val_data_percentage=val_data_percentage, random_seed=1)
+
+    # saving to pickle file for faster loading.
+    with open(pickle_file_path, 'wb') as f:
+        pickle.dump([m_train, m_val, m_test], f)
+
+    return m_train, m_val, m_test
+
+
 def main():
-    training_length = 50
+    seq_length = 50
 
     # get embeddings_dictionary
     embeddings_dict = get_embeddings_dict(load_pickle=True)
@@ -310,21 +362,25 @@ def main():
                                          songs_artists=all_songs_artists,
                                          songs_names=all_songs_names)
 
-    # extract melody features
-    melody_features = extract_melody_features(all_songs_melodies)
-
     # tokenize the lyrics
-    # encoded_data, word_index, vocab_size, tokenizer = convert_words_to_integers(all_songs_lyrics)
+    encoded_data, word_index, vocab_size, tokenizer = convert_words_to_integers(all_songs_lyrics)
 
     # create a weight matrix for lyrics words.
-    # embedding_matrix = create_embedding_matrix(vocab_size, word_index, embeddings_dict)
+    embedding_matrix = create_embedding_matrix(vocab_size, word_index, embeddings_dict)
 
     # prepare data for the model.
-    # x_train, x_val, x_test, y_train, y_val, y_test = prepare_data(encoded_data, len(train_songs_lyrics), vocab_size,
-    #                                                               training_length)
+    val_data_percentage = 0.2
+    x_train, x_val, x_test, y_train, y_val, y_test = prepare_data(encoded_data, len(train_songs_lyrics), vocab_size,
+                                                                  seq_length, val_data_percentage)
 
-    # model = get_LSTM_model(vocab_size, training_length, embedding_matrix)
-    # model.summary()
+    # prepare melody data for the model.
+    total_dataset_size = x_train.shape[0] + x_val.shape[0] + x_test.shape[0]
+    train_size = total_dataset_size - x_test.shape[0]
+    m_train, m_val, m_test = prepare_melody_data(train_size, val_data_percentage, all_songs_melodies,
+                                                 total_dataset_size, seq_length, encoded_data, load_pickle=True)
+
+    model = get_LSTM_model(vocab_size, seq_length, embedding_matrix)
+    model.summary()
 
     # model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
 
