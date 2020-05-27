@@ -2,15 +2,15 @@ from random import randint
 import pretty_midi
 import os
 import time
+from keras import Input, Model
 from keras.models import Sequential
-from keras.layers import LSTM, Dense, Dropout, Masking, Embedding, CuDNNLSTM
+from keras.layers import LSTM, Dense, Dropout, Masking, Embedding, CuDNNLSTM, Concatenate
 import numpy as np
 import pickle
 import csv
-
-from keras.preprocessing.sequence import pad_sequences
+from numpy import savez_compressed
+from numpy import load
 from keras_preprocessing.text import Tokenizer
-from sklearn.model_selection import train_test_split
 from keras.callbacks import EarlyStopping, ModelCheckpoint
 from numpy.random import choice
 
@@ -50,6 +50,52 @@ def get_LSTM_model(num_words, seq_length, embedding_matrix):
     # Output layer
     model.add(Dense(num_words, activation='softmax'))
 
+    return model
+
+
+def get_LSTM_model_2(num_words, seq_length, embedding_matrix, lyrics_input_shape=(50,),
+                     melody_features_shape=(50, 108)):
+
+    # Define the tensors for the two input
+    lyrics_input = Input(lyrics_input_shape)
+    melody_features_input = Input(melody_features_shape)
+
+    # Embedding layer
+    embedding = Embedding(input_dim=num_words,
+                  input_length=seq_length,
+                  output_dim=300,
+                  weights=[embedding_matrix],
+                  trainable=False,
+                  mask_zero=True)(lyrics_input)
+
+    # Masking layer for pre-trained embeddings
+    masking = Masking(mask_value=0.0)(embedding)
+
+
+    # add melody features to the current 300 features
+    # tf.keras.layers.Concatenate(axis=0)([x, y])
+    # todo: turn lyrics_input_shape from (1, 108) to (50, 108)
+    # input1 need to be shape of (none, 50, 108)
+    # input2 is shape of (none, 50, 300)
+    # outpot need to be shape of (none, 50, 408)
+    concatenate = Concatenate(axis=2)([masking, melody_features_input])
+
+    # Recurrent layer
+    lstm = LSTM(64, return_sequences=False, dropout=0.1)(concatenate)
+
+    # Fully connected layer
+    dense = Dense(64, activation='relu')(lstm)
+
+    # Dropout for regularization
+    dropout = Dropout(0.5)(dense)
+
+    # Output layer
+    prediction = Dense(num_words, activation='softmax')(dropout)
+
+    # Connect the inputs with the outputs
+    model = Model(inputs=[lyrics_input, melody_features_input], outputs=prediction)
+
+    # return the model
     return model
 
 
@@ -185,15 +231,6 @@ def generate_seq(model, tokenizer, seq_length, seed_text, n_words, encoded):
     in_text = seed_text
     # generate a fixed number of words
     for _ in range(n_words - 1):
-        # encode the text as integer
-        # encoded = tokenizer.texts_to_sequences([in_text])[0]
-        # truncate sequences to a fixed length
-        # encoded = pad_sequences([encoded], maxlen=seq_length, truncating='pre')
-        # encoded_test = np.zeros(seq_length)
-        # encoded_test[seq_length-1] = encoded_word
-        # encoded_test = encoded_test.reshape((1, len(encoded_test)))
-        # predict probabilities for each word
-        # yhat = model.predict_classes(encoded, verbose=0)
         prediction = model.predict(encoded)
         prediction = prediction.reshape(prediction.size)
         indecies = np.arange(prediction.size)
@@ -266,23 +303,30 @@ def extract_melody_features(all_songs_melodies, total_dataset_size, seq_length, 
     # the features for the melody are a vector of size 88 notes (0 or 1) and melody tempo total size of 89.
     # note number to name can be found at https://newt.phys.unsw.edu.au/jw/notes.html
 
-    # extract features
-    melody_features = np.zeros((total_dataset_size, 108))
-    ctr = 0
+    melody_features = np.zeros((len(all_songs_melodies), 108))  # test shape is (5, 108)
     for i in range(len(all_songs_melodies)):
         melody = all_songs_melodies[i]
-        songs_lyric = encoded_data[i]
         if melody is not None:
             for instrument in melody.instruments:
                 for note in instrument.notes:
-                    for j in range(len(songs_lyric) - seq_length):
-                        melody_features[ctr+j][note.pitch-21] = 1
-            for j in range(len(songs_lyric) - seq_length):
-                melody_features[ctr+j][107] = melody.estimate_tempo()
-            ctr += len(songs_lyric) - seq_length
+                    melody_features[i][note.pitch-21] = 1
+            melody_features[i][107] = melody.estimate_tempo()
+
+    melody_features_per_seq = np.empty((melody_features.shape[0], 50, 108))  # test shape is (5, 50, 108)
+    for i in range(melody_features.shape[0]):
+        melody_features_per_seq[i] = np.tile(melody_features[i], (50, 1))
+
+    all_melody_features_per_seq = np.empty((total_dataset_size, 50, 108))  # test shape is (909, 50, 108)
+    ctr = 0
+    for i in range(len(all_songs_melodies)):
+        songs_lyric = encoded_data[i]
+        # melody_features_per_seq_tile = np.empty((len(songs_lyric) - seq_length, 50, 108))
+        for j in range(len(songs_lyric) - seq_length):
+            all_melody_features_per_seq[ctr] = melody_features_per_seq[i]
+            ctr += 1
             print(ctr)
 
-    return melody_features
+    return all_melody_features_per_seq  # test shape is (909, 50, 108)
 
 
 def separate_melody_data(melody_features, songs_lyrics, seq_length):
@@ -308,12 +352,15 @@ def train_val_split(train, val_data_percentage, random_seed):
 
 
 def prepare_melody_data(train_size, val_data_percentage, all_songs_melodies, total_dataset_size, seq_length,
-                        encoded_data, load_pickle):
-    pickle_file_path = "ass3_data" + path_separator + "melody_data" + ".pickle"
-    if load_pickle:
-        # load from saved pickle file, for faster loading.
-        with open(pickle_file_path, 'rb') as f:
-            m_train, m_val, m_test = pickle.load(f)
+                        encoded_data, load_data):
+    npz_train_file_path = "ass3_data" + path_separator + "melody_train_data" + ".npz"
+    npz_val_file_path = "ass3_data" + path_separator + "melody_val_data" + ".npz"
+    npz_test_file_path = "ass3_data" + path_separator + "melody_test_data" + ".npz"
+    # load from saved file, for faster loading.
+    if load_data:
+        m_train = load(npz_train_file_path)
+        m_val = load(npz_val_file_path)
+        m_test = load(npz_test_file_path)
         return m_train, m_val, m_test
 
     # extract melody features
@@ -326,8 +373,9 @@ def prepare_melody_data(train_size, val_data_percentage, all_songs_melodies, tot
     m_train, m_val = train_val_split(train=m_train, val_data_percentage=val_data_percentage, random_seed=1)
 
     # saving to pickle file for faster loading.
-    with open(pickle_file_path, 'wb') as f:
-        pickle.dump([m_train, m_val, m_test], f)
+    savez_compressed(npz_train_file_path, m_train)
+    savez_compressed(npz_val_file_path, m_val)
+    savez_compressed(npz_test_file_path, m_test)
 
     return m_train, m_val, m_test
 
@@ -336,7 +384,7 @@ def main():
     seq_length = 50
 
     # get embeddings_dictionary
-    embeddings_dict = get_embeddings_dict(load_pickle=True)
+    # embeddings_dict = get_embeddings_dict(load_pickle=True)
 
     # load dataset
     train_songs_artists, train_songs_names, train_songs_lyrics = load_data_set(data_type="train", load_pickle=True)
@@ -366,7 +414,7 @@ def main():
     encoded_data, word_index, vocab_size, tokenizer = convert_words_to_integers(all_songs_lyrics)
 
     # create a weight matrix for lyrics words.
-    embedding_matrix = create_embedding_matrix(vocab_size, word_index, embeddings_dict)
+    # embedding_matrix = create_embedding_matrix(vocab_size, word_index, embeddings_dict)
 
     # prepare data for the model.
     val_data_percentage = 0.2
@@ -375,12 +423,13 @@ def main():
 
     # prepare melody data for the model.
     total_dataset_size = x_train.shape[0] + x_val.shape[0] + x_test.shape[0]
+    # m_test = extract_melody_features(all_songs_melodies[600:], x_test.shape[0], seq_length, encoded_data[600:])
     train_size = total_dataset_size - x_test.shape[0]
     m_train, m_val, m_test = prepare_melody_data(train_size, val_data_percentage, all_songs_melodies,
-                                                 total_dataset_size, seq_length, encoded_data, load_pickle=True)
+                                                 total_dataset_size, seq_length, encoded_data, load_data=True)
 
-    model = get_LSTM_model(vocab_size, seq_length, embedding_matrix)
-    model.summary()
+    # model = get_LSTM_model_2(vocab_size, seq_length, embedding_matrix)
+    # model.summary()
 
     # model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
 
@@ -402,7 +451,18 @@ def main():
     # generate_song_lyrics(word_index, training_length, model, tokenizer)
 
 
+def copy_d(m):
+    m_new = np.empty((m.shape[0], 50, 108))
+    for i in range(m.shape[0]):
+        temp = np.tile(m[i], (50, 1))
+        m_new[i] = temp
+    return m_new
+
 if __name__ == '__main__':
     start_time = time.time()
     main()
+    # m_train, m_val, m_test = prepare_melody_data(0, 0, [], 0, 0, [], load_pickle=True)
+    # print(m_train.shape)
+    # m_new = copy_d(m_train)
+    # print(m_new.shape)
     print("--- %s seconds ---" % (time.time() - start_time))
