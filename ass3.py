@@ -358,9 +358,9 @@ def prepare_melody_data(train_size, val_data_percentage, all_songs_melodies, tot
     npz_test_file_path = "ass3_data" + path_separator + "melody_test_data" + ".npz"
     # load from saved file, for faster loading.
     if load_data:
-        m_train = load(npz_train_file_path)
-        m_val = load(npz_val_file_path)
-        m_test = load(npz_test_file_path)
+        m_train = load(npz_train_file_path)['arr_0']
+        m_val = load(npz_val_file_path)['arr_0']
+        m_test = load(npz_test_file_path)['arr_0']
         return m_train, m_val, m_test
 
     # extract melody features
@@ -384,7 +384,7 @@ def main():
     seq_length = 50
 
     # get embeddings_dictionary
-    # embeddings_dict = get_embeddings_dict(load_pickle=True)
+    embeddings_dict = get_embeddings_dict(load_pickle=True)
 
     # load dataset
     train_songs_artists, train_songs_names, train_songs_lyrics = load_data_set(data_type="train", load_pickle=True)
@@ -414,7 +414,7 @@ def main():
     encoded_data, word_index, vocab_size, tokenizer = convert_words_to_integers(all_songs_lyrics)
 
     # create a weight matrix for lyrics words.
-    # embedding_matrix = create_embedding_matrix(vocab_size, word_index, embeddings_dict)
+    embedding_matrix = create_embedding_matrix(vocab_size, word_index, embeddings_dict)
 
     # prepare data for the model.
     val_data_percentage = 0.2
@@ -427,9 +427,8 @@ def main():
     train_size = total_dataset_size - x_test.shape[0]
     m_train, m_val, m_test = prepare_melody_data(train_size, val_data_percentage, all_songs_melodies,
                                                  total_dataset_size, seq_length, encoded_data, load_data=True)
-
-    # model = get_LSTM_model_2(vocab_size, seq_length, embedding_matrix)
-    # model.summary()
+    model = get_LSTM_model_2(vocab_size, seq_length, embedding_matrix)
+    model.summary()
 
     # model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
 
