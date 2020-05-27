@@ -2,8 +2,9 @@ from random import randint
 import pretty_midi
 import os
 import time
+from keras import Input, Model
 from keras.models import Sequential
-from keras.layers import LSTM, Dense, Dropout, Masking, Embedding, CuDNNLSTM
+from keras.layers import LSTM, Dense, Dropout, Masking, Embedding, CuDNNLSTM, Concatenate
 import numpy as np
 import pickle
 import csv
@@ -50,6 +51,52 @@ def get_LSTM_model(num_words, seq_length, embedding_matrix):
     # Output layer
     model.add(Dense(num_words, activation='softmax'))
 
+    return model
+
+
+def get_LSTM_model_2(num_words, seq_length, embedding_matrix, lyrics_input_shape=(50,),
+                     melody_features_shape=(50, 108)):
+
+    # Define the tensors for the two input
+    lyrics_input = Input(lyrics_input_shape)
+    melody_features_input = Input(melody_features_shape)
+
+    # Embedding layer
+    embedding = Embedding(input_dim=num_words,
+                  input_length=seq_length,
+                  output_dim=300,
+                  weights=[embedding_matrix],
+                  trainable=False,
+                  mask_zero=True)(lyrics_input)
+
+    # Masking layer for pre-trained embeddings
+    masking = Masking(mask_value=0.0)(embedding)
+
+
+    # add melody features to the current 300 features
+    # tf.keras.layers.Concatenate(axis=0)([x, y])
+    # todo: turn lyrics_input_shape from (1, 108) to (50, 108)
+    # input1 need to be shape of (none, 50, 108)
+    # input2 is shape of (none, 50, 300)
+    # outpot need to be shape of (none, 50, 408)
+    concatenate = Concatenate(axis=2)([masking, melody_features_input])
+
+    # Recurrent layer
+    lstm = LSTM(64, return_sequences=False, dropout=0.1)(concatenate)
+
+    # Fully connected layer
+    dense = Dense(64, activation='relu')(lstm)
+
+    # Dropout for regularization
+    dropout = Dropout(0.5)(dense)
+
+    # Output layer
+    prediction = Dense(num_words, activation='softmax')(dropout)
+
+    # Connect the inputs with the outputs
+    model = Model(inputs=[lyrics_input, melody_features_input], outputs=prediction)
+
+    # return the model
     return model
 
 
@@ -185,15 +232,6 @@ def generate_seq(model, tokenizer, seq_length, seed_text, n_words, encoded):
     in_text = seed_text
     # generate a fixed number of words
     for _ in range(n_words - 1):
-        # encode the text as integer
-        # encoded = tokenizer.texts_to_sequences([in_text])[0]
-        # truncate sequences to a fixed length
-        # encoded = pad_sequences([encoded], maxlen=seq_length, truncating='pre')
-        # encoded_test = np.zeros(seq_length)
-        # encoded_test[seq_length-1] = encoded_word
-        # encoded_test = encoded_test.reshape((1, len(encoded_test)))
-        # predict probabilities for each word
-        # yhat = model.predict_classes(encoded, verbose=0)
         prediction = model.predict(encoded)
         prediction = prediction.reshape(prediction.size)
         indecies = np.arange(prediction.size)
@@ -379,7 +417,7 @@ def main():
     m_train, m_val, m_test = prepare_melody_data(train_size, val_data_percentage, all_songs_melodies,
                                                  total_dataset_size, seq_length, encoded_data, load_pickle=True)
 
-    model = get_LSTM_model(vocab_size, seq_length, embedding_matrix)
+    model = get_LSTM_model_2(vocab_size, seq_length, embedding_matrix)
     model.summary()
 
     # model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
@@ -402,7 +440,19 @@ def main():
     # generate_song_lyrics(word_index, training_length, model, tokenizer)
 
 
+def copy_d(m):
+    m_new = np.empty((m.shape[0], 50, 108))
+    for i in range(m.shape[0]):
+        temp = np.tile(m[i], (50, 1))
+        m_new[i] = temp
+    return m_new
+
 if __name__ == '__main__':
     start_time = time.time()
     main()
+    m_train, m_val, m_test = prepare_melody_data(0, 0, [], 0, 0, [], load_pickle=True)
+    # todo: turn lyrics_input_shape from (1, 108) to (50, 108)
+    print(m_train.shape)
+    m_new = copy_d(m_train)
+    print(m_new.shape)
     print("--- %s seconds ---" % (time.time() - start_time))
