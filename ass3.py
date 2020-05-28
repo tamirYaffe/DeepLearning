@@ -100,7 +100,7 @@ def get_LSTM_model_2(num_words, seq_length, embedding_matrix, lyrics_input_shape
 
 def get_embeddings_dict(load_pickle):
     embeddings_dict = {}
-    embeddings_dict_path = "ass3_data" + path_separator + "embeddings_dict.pickle"
+    embeddings_dict_path = "ass3_data" + path_separator + "pickle" + path_separator + "embeddings_dict.pickle"
 
     if load_pickle:
         # load from saved pickle file, for faster loading.
@@ -127,7 +127,7 @@ def load_data_set(data_type, load_pickle):
     songs_artists = []
     songs_names = []
     songs_lyrics = []
-    pickle_file_path = "ass3_data" + path_separator + data_type + ".pickle"
+    pickle_file_path = "ass3_data" + path_separator + "pickle" + path_separator + data_type + ".pickle"
 
     if load_pickle:
         # load from saved pickle file, for faster loading.
@@ -267,7 +267,7 @@ def generate_song_lyrics(word_index, training_length, model, tokenizer):
 
 def load_midi_files(load_pickle, songs_artists, songs_names):
     all_songs_melodies = []
-    pickle_file_path = "ass3_data" + path_separator + "midi_files" + ".pickle"
+    pickle_file_path = "ass3_data" + path_separator + "pickle" + path_separator + "midi_files" + ".pickle"
 
     if load_pickle:
         # load from saved pickle file, for faster loading.
@@ -352,9 +352,9 @@ def train_val_split(train, val_data_percentage, random_seed):
 
 def prepare_melody_data(train_size, val_data_percentage, all_songs_melodies, total_dataset_size, seq_length,
                         encoded_data, load_data):
-    npz_train_file_path = "ass3_data" + path_separator + "melody_train_data" + ".npz"
-    npz_val_file_path = "ass3_data" + path_separator + "melody_val_data" + ".npz"
-    npz_test_file_path = "ass3_data" + path_separator + "melody_test_data" + ".npz"
+    npz_train_file_path = "ass3_data" + path_separator + "npz" + path_separator + "melody_train_data" + ".npz"
+    npz_val_file_path = "ass3_data" + path_separator + "npz" + path_separator + "melody_val_data" + ".npz"
+    npz_test_file_path = "ass3_data" + path_separator + "npz" + path_separator + "melody_test_data" + ".npz"
     # load from saved file, for faster loading.
     if load_data:
         m_train = load(npz_train_file_path)['arr_0']
