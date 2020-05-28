@@ -74,7 +74,6 @@ def get_LSTM_model_2(num_words, seq_length, embedding_matrix, lyrics_input_shape
 
     # add melody features to the current 300 features
     # tf.keras.layers.Concatenate(axis=0)([x, y])
-    # todo: turn lyrics_input_shape from (1, 108) to (50, 108)
     # input1 need to be shape of (none, 50, 108)
     # input2 is shape of (none, 50, 300)
     # outpot need to be shape of (none, 50, 408)
@@ -427,25 +426,31 @@ def main():
     train_size = total_dataset_size - x_test.shape[0]
     m_train, m_val, m_test = prepare_melody_data(train_size, val_data_percentage, all_songs_melodies,
                                                  total_dataset_size, seq_length, encoded_data, load_data=True)
+
+    # add melody to train, val and test data
+    x_train = [x_train, m_train]
+    x_val = [x_val, m_val]
+    x_test = [x_test, m_test]
+
     model = get_LSTM_model_2(vocab_size, seq_length, embedding_matrix)
     model.summary()
 
-    # model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
 
     # Create callbacks
-    # callbacks = [
-    #     EarlyStopping(monitor='val_loss', patience=5),
-    #     ModelCheckpoint(filepath='model.{epoch:02d}-{val_loss:.2f}.h5', save_best_only=True, save_weights_only=True)
-    # ]
+    callbacks = [
+        EarlyStopping(monitor='val_loss', patience=5),
+        ModelCheckpoint(filepath='model.{epoch:02d}-{val_loss:.2f}.h5', save_best_only=True, save_weights_only=True)
+    ]
 
-    # history = model.fit(x_train, y_train,
-    #                     batch_size=2048, epochs=150,
-    #                     callbacks=callbacks,
-    #                     validation_data=(x_val, y_val))
+    history = model.fit(x_train, y_train,
+                        batch_size=2048, epochs=150,
+                        callbacks=callbacks,
+                        validation_data=(x_val, y_val))
 
     # model.load_weights("ass3_data" + path_separator + 'model_weights.h5')
-    # score = model.evaluate(x_test, y_test, batch_size=2048)
-    # print(score)
+    score = model.evaluate(x_test, y_test, batch_size=2048)
+    print(score)
 
     # generate_song_lyrics(word_index, training_length, model, tokenizer)
 
@@ -460,8 +465,4 @@ def copy_d(m):
 if __name__ == '__main__':
     start_time = time.time()
     main()
-    # m_train, m_val, m_test = prepare_melody_data(0, 0, [], 0, 0, [], load_pickle=True)
-    # print(m_train.shape)
-    # m_new = copy_d(m_train)
-    # print(m_new.shape)
     print("--- %s seconds ---" % (time.time() - start_time))
