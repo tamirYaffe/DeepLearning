@@ -224,7 +224,7 @@ def prepare_data(encoded_data, train_size, vocab_size, seq_length, val_data_perc
     return x_train, x_val, x_test, y_train, y_val, y_test
 
 
-def generate_seq(model, tokenizer, seq_length, seed_text, n_words, encoded):
+def generate_seq(model, tokenizer, seed_text, n_words, encoded):
     result = list()
     result.append(seed_text)
     in_text = seed_text
@@ -250,18 +250,76 @@ def generate_seq(model, tokenizer, seq_length, seed_text, n_words, encoded):
     return ' '.join(result)
 
 
-def generate_song_lyrics(word_index, training_length, model, tokenizer):
+def generate_seq_with_melody(model, tokenizer, seed_text, n_words, encoded, melody_features_seq):
+    result = list()
+    result.append(seed_text)
+    # generate a fixed number of words
+    for _ in range(n_words - 1):
+        input_to_predict = [encoded, melody_features_seq]
+        prediction = model.predict(input_to_predict)
+        prediction = prediction.reshape(prediction.size)
+        indecies = np.arange(prediction.size)
+        draw = choice(indecies, 1, p=prediction)
+        # map predicted word index to word
+        out_word = ''
+        for word, index in tokenizer.word_index.items():
+            if index == draw:
+                out_word = word
+                break
+        # append to input
+        encoded.reshape(encoded.size)
+        encoded = np.c_[encoded, draw]
+        encoded = np.delete(encoded, 1, 1)
+        encoded.reshape((1, encoded.size))
+        result.append(out_word)
+    return ' '.join(result)
+
+
+def generate_song_lyrics(word_index, seq_length, model, tokenizer):
     # select a seed text
     # seed_text = all_songs_lyrics[randint(0, len(all_songs_lyrics))]
     seed_encode_word = randint(0, len(word_index))
     seed_text = word_index[seed_encode_word]
-    encoded_test = np.zeros(training_length)
-    encoded_test[training_length - 1] = seed_encode_word
+    encoded_test = np.zeros(seq_length)
+    encoded_test[seq_length - 1] = seed_encode_word
     encoded_test = encoded_test.reshape((1, len(encoded_test)))
     print(seed_text + '\n')
 
     # generate new text
-    generated = generate_seq(model, tokenizer, training_length, seed_text, training_length, encoded_test)
+    generated = generate_seq(model, tokenizer, seed_text, seq_length, encoded_test)
+    print(generated)
+
+
+def generate_song_lyrics_with_melody(word_index, seq_length, model, tokenizer, all_songs_artists, all_songs_names,
+                         all_songs_melodies):
+    # select a seed text
+    # seed_text = all_songs_lyrics[randint(0, len(all_songs_lyrics))]
+    seed_encode_word = randint(0, len(word_index))
+    seed_text = word_index[seed_encode_word]
+    encoded_text_seq = np.zeros(seq_length)
+    encoded_text_seq[seq_length - 1] = seed_encode_word
+    encoded_text_seq = encoded_text_seq.reshape((1, len(encoded_text_seq)))
+    print(seed_text + '\n')
+
+    # select random melody
+    random_melody_index = randint(0, len(all_songs_melodies))
+    seed_song_artist = all_songs_artists[random_melody_index]
+    seed_song_name = all_songs_names[random_melody_index]
+    print(seed_song_artist + " - " + seed_song_name)
+
+    # extract melody features
+    seed_melody = all_songs_melodies[random_melody_index]
+    seed_melody_features = np.zeros(108)
+    for instrument in seed_melody.instruments:
+        for note in instrument.notes:
+            seed_melody_features[note.pitch - 21] = 1
+    seed_melody_features[107] = seed_melody.estimate_tempo()
+
+    seed_melody_features_seq = np.empty((1, 50, 108))
+    seed_melody_features_seq[0] = np.tile(seed_melody_features, (50, 1))
+
+    # generate new text
+    generated = generate_seq_with_melody(model, tokenizer, seed_text, seq_length, encoded_text_seq, seed_melody_features_seq)
     print(generated)
 
 
@@ -443,24 +501,20 @@ def main():
         ModelCheckpoint(filepath='model.{epoch:02d}-{val_loss:.2f}.h5', save_best_only=True, save_weights_only=True)
     ]
 
-    history = model.fit(x_train, y_train,
-                        batch_size=2048, epochs=150,
-                        callbacks=callbacks,
-                        validation_data=(x_val, y_val))
+    # history = model.fit(x_train, y_train,
+    #                     batch_size=2048, epochs=150,
+    #                     callbacks=callbacks,
+    #                     validation_data=(x_val, y_val))
 
-    # model.load_weights("ass3_data" + path_separator + 'model_weights.h5')
-    score = model.evaluate(x_test, y_test, batch_size=2048)
-    print(score)
+    model.load_weights("ass3_data" + path_separator + 'model_weights_final.h5')
+    # score = model.evaluate(x_test, y_test, batch_size=2048)
+    # print(score)
 
-    # generate_song_lyrics(word_index, training_length, model, tokenizer)
+    generate_song_lyrics_with_melody(word_index, seq_length, model, tokenizer,
+                         all_songs_artists,
+                         all_songs_names,
+                         all_songs_melodies)
 
-
-def copy_d(m):
-    m_new = np.empty((m.shape[0], 50, 108))
-    for i in range(m.shape[0]):
-        temp = np.tile(m[i], (50, 1))
-        m_new[i] = temp
-    return m_new
 
 if __name__ == '__main__':
     start_time = time.time()
