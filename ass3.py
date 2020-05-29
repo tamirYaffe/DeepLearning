@@ -386,6 +386,40 @@ def extract_melody_features(all_songs_melodies, total_dataset_size, seq_length, 
     return all_melody_features_per_seq  # test shape is (909, 50, 108)
 
 
+def extract_melody_features_per_seq(all_songs_melodies, total_dataset_size, seq_length, encoded_data):
+    # the features for the melody are a vector of size 88 notes (0 or 1) and melody tempo total size of 89.
+    # note number to name can be found at https://newt.phys.unsw.edu.au/jw/notes.html
+
+    all_melody_features_per_seq = np.empty((total_dataset_size, 50, 107))  # test shape is (909, 50, 108)
+    ctr = 0
+    for i in range(len(all_songs_melodies)):
+        melody = all_songs_melodies[i]
+        songs_lyric = encoded_data[i]
+        num_of_words = len(songs_lyric)
+        num_of_seq = num_of_words - seq_length
+        # build word_to_notes_array
+        word_to_notes = np.zeros((num_of_words, 107))
+        if melody is not None:
+            piano_roll = melody.get_piano_roll(fs=100)[21:]
+            num_of_m_sec_per_word = int(piano_roll.shape[1]/num_of_words)
+            for word_num in range(num_of_words):
+                start = word_num * num_of_m_sec_per_word
+                end = start + num_of_m_sec_per_word
+                piano_roll_slice = piano_roll[:, start:end].transpose()
+                piano_roll_slice_sum = np.sum(piano_roll_slice, axis=0)
+                piano_roll_slice_sum[piano_roll_slice_sum > 1] = 1
+                word_to_notes[word_num] = piano_roll_slice_sum
+
+        # create seq of word_to_notes
+        for seq_num in range(num_of_seq):
+            seq = word_to_notes[seq_num:seq_num + seq_length]
+            all_melody_features_per_seq[ctr] = seq
+            ctr += 1
+            print(ctr)
+
+    return all_melody_features_per_seq  # test shape is (909, 50, 108)
+
+
 def separate_melody_data(melody_features, songs_lyrics, seq_length):
     melody_features_seq = melody_features[0]
 
@@ -421,7 +455,7 @@ def prepare_melody_data(train_size, val_data_percentage, all_songs_melodies, tot
         return m_train, m_val, m_test
 
     # extract melody features
-    melody_features = extract_melody_features(all_songs_melodies, total_dataset_size, seq_length, encoded_data)
+    melody_features = extract_melody_features_per_seq(all_songs_melodies, total_dataset_size, seq_length, encoded_data)
 
     # split data to train and test
     m_train, m_test = melody_features[:train_size], melody_features[train_size:]
@@ -480,40 +514,40 @@ def main():
 
     # prepare melody data for the model.
     total_dataset_size = x_train.shape[0] + x_val.shape[0] + x_test.shape[0]
-    # m_test = extract_melody_features(all_songs_melodies[600:], x_test.shape[0], seq_length, encoded_data[600:])
+    # m_test = extract_melody_features_per_seq(all_songs_melodies[600:], x_test.shape[0], seq_length, encoded_data[600:])
     train_size = total_dataset_size - x_test.shape[0]
     m_train, m_val, m_test = prepare_melody_data(train_size, val_data_percentage, all_songs_melodies,
                                                  total_dataset_size, seq_length, encoded_data, load_data=True)
 
     # add melody to train, val and test data
     x_train = [x_train, m_train]
-    x_val = [x_val, m_val]
-    x_test = [x_test, m_test]
+    # x_val = [x_val, m_val]
+    # x_test = [x_test, m_test]
 
-    model = get_LSTM_model_2(vocab_size, seq_length, embedding_matrix)
-    model.summary()
+    # model = get_LSTM_model_2(vocab_size, seq_length, embedding_matrix)
+    # model.summary()
 
-    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+    # model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
 
     # Create callbacks
-    callbacks = [
-        EarlyStopping(monitor='val_loss', patience=5),
-        ModelCheckpoint(filepath='model.{epoch:02d}-{val_loss:.2f}.h5', save_best_only=True, save_weights_only=True)
-    ]
+    # callbacks = [
+    #     EarlyStopping(monitor='val_loss', patience=5),
+    #     ModelCheckpoint(filepath='model.{epoch:02d}-{val_loss:.2f}.h5', save_best_only=True, save_weights_only=True)
+    # ]
 
     # history = model.fit(x_train, y_train,
     #                     batch_size=2048, epochs=150,
     #                     callbacks=callbacks,
     #                     validation_data=(x_val, y_val))
 
-    model.load_weights("ass3_data" + path_separator + 'model_weights_final.h5')
+    # model.load_weights("ass3_data" + path_separator + 'model_weights_final.h5')
     # score = model.evaluate(x_test, y_test, batch_size=2048)
     # print(score)
 
-    generate_song_lyrics_with_melody(word_index, seq_length, model, tokenizer,
-                         all_songs_artists,
-                         all_songs_names,
-                         all_songs_melodies)
+    # generate_song_lyrics_with_melody(word_index, seq_length, model, tokenizer,
+    #                      all_songs_artists,
+    #                      all_songs_names,
+    #                      all_songs_melodies)
 
 
 if __name__ == '__main__':
