@@ -4,7 +4,7 @@ import os
 import time
 from keras import Input, Model
 from keras.models import Sequential
-from keras.layers import LSTM, Dense, Dropout, Masking, Embedding, CuDNNLSTM, Concatenate
+from keras.layers import LSTM, Dense, Dropout, Masking, Embedding, Concatenate, Bidirectional
 import numpy as np
 import pickle
 import csv
@@ -54,7 +54,7 @@ def get_LSTM_model(num_words, seq_length, embedding_matrix):
 
 
 def get_LSTM_model_2(num_words, seq_length, embedding_matrix, lyrics_input_shape=(50,),
-                     melody_features_shape=(50, 108)):
+                     melody_features_shape=(50, 107)):
 
     # Define the tensors for the two input
     lyrics_input = Input(lyrics_input_shape)
@@ -80,10 +80,12 @@ def get_LSTM_model_2(num_words, seq_length, embedding_matrix, lyrics_input_shape
     concatenate = Concatenate(axis=2)([masking, melody_features_input])
 
     # Recurrent layer
-    lstm = LSTM(64, return_sequences=False, dropout=0.1)(concatenate)
+    lstm = Bidirectional(LSTM(50, return_sequences=True, dropout=0.1))(concatenate)
+    lstm = Bidirectional(LSTM(50, return_sequences=False, dropout=0.1))(lstm)
 
     # Fully connected layer
-    dense = Dense(64, activation='relu')(lstm)
+    # dense = TimeDistributed(Dense(1))(lstm)
+    dense = Dense(128, activation='relu')(lstm)
 
     # Dropout for regularization
     dropout = Dropout(0.5)(dense)
@@ -250,12 +252,37 @@ def generate_seq(model, tokenizer, seed_text, n_words, encoded):
     return ' '.join(result)
 
 
-def generate_seq_with_melody(model, tokenizer, seed_text, n_words, encoded, melody_features_seq):
+def generate_seq_with_melody_v1(model, tokenizer, seed_text, n_words, encoded, melody_features_seq):
     result = list()
     result.append(seed_text)
     # generate a fixed number of words
-    for _ in range(n_words - 1):
+    for _ in range(n_words):
         input_to_predict = [encoded, melody_features_seq]
+        prediction = model.predict(input_to_predict)
+        prediction = prediction.reshape(prediction.size)
+        indecies = np.arange(prediction.size)
+        draw = choice(indecies, 1, p=prediction)
+        # map predicted word index to word
+        out_word = ''
+        for word, index in tokenizer.word_index.items():
+            if index == draw:
+                out_word = word
+                break
+        # append to input
+        encoded.reshape(encoded.size)
+        encoded = np.c_[encoded, draw]
+        encoded = np.delete(encoded, 1, 1)
+        encoded.reshape((1, encoded.size))
+        result.append(out_word)
+    return ' '.join(result)
+
+
+def generate_seq_with_melody_v2(model, tokenizer, seed_text, n_words, encoded, melody_features_seq):
+    result = list()
+    result.append(seed_text)
+    # generate a fixed number of words
+    for i in range(n_words):
+        input_to_predict = [encoded, np.expand_dims(melody_features_seq[i], axis=0)]
         prediction = model.predict(input_to_predict)
         prediction = prediction.reshape(prediction.size)
         indecies = np.arange(prediction.size)
@@ -290,8 +317,8 @@ def generate_song_lyrics(word_index, seq_length, model, tokenizer):
     print(generated)
 
 
-def generate_song_lyrics_with_melody(word_index, seq_length, model, tokenizer, all_songs_artists, all_songs_names,
-                         all_songs_melodies):
+def generate_song_lyrics_with_melody_v1(word_index, seq_length, model, tokenizer, all_songs_artists, all_songs_names,
+                                        all_songs_melodies, num_words_to_generate):
     # select a seed text
     # seed_text = all_songs_lyrics[randint(0, len(all_songs_lyrics))]
     seed_encode_word = randint(0, len(word_index))
@@ -319,7 +346,62 @@ def generate_song_lyrics_with_melody(word_index, seq_length, model, tokenizer, a
     seed_melody_features_seq[0] = np.tile(seed_melody_features, (50, 1))
 
     # generate new text
-    generated = generate_seq_with_melody(model, tokenizer, seed_text, seq_length, encoded_text_seq, seed_melody_features_seq)
+    generated = generate_seq_with_melody_v1(model, tokenizer, seed_text, num_words_to_generate, encoded_text_seq, seed_melody_features_seq)
+    print(generated)
+
+
+def generate_song_lyrics_with_melody_v2(word_index, seq_length, model, tokenizer, all_songs_artists, all_songs_names,
+                                        all_songs_melodies, encoded_data, num_words_to_generate):
+    # select a seed text
+    # seed_text = all_songs_lyrics[randint(0, len(all_songs_lyrics))]
+    seed_encode_word = randint(0, len(word_index))
+    seed_text = word_index[seed_encode_word]
+    encoded_text_seq = np.zeros(seq_length)
+    encoded_text_seq[seq_length - 1] = seed_encode_word
+    encoded_text_seq = encoded_text_seq.reshape((1, len(encoded_text_seq)))
+    print(seed_text + '\n')
+
+    # select random melody
+    random_melody_index = randint(0, len(all_songs_melodies))
+    seed_song_artist = all_songs_artists[random_melody_index]
+    seed_song_name = all_songs_names[random_melody_index]
+    print(seed_song_artist + " - " + seed_song_name)
+
+    # extract melody features
+    seed_melody = all_songs_melodies[random_melody_index]
+    songs_lyric = encoded_data[random_melody_index]
+    num_of_words = len(songs_lyric)
+    num_of_seq = num_of_words - seq_length
+    # build word_to_notes_array
+    word_to_notes = np.zeros((num_of_words, 107))
+    if seed_melody is not None:
+        piano_roll = seed_melody.get_piano_roll(fs=100)[21:]
+        num_of_m_sec_per_word = int(piano_roll.shape[1] / num_of_words)
+        for word_num in range(num_of_words):
+            start = word_num * num_of_m_sec_per_word
+            end = start + num_of_m_sec_per_word
+            piano_roll_slice = piano_roll[:, start:end].transpose()
+            piano_roll_slice_sum = np.sum(piano_roll_slice, axis=0)
+            piano_roll_slice_sum[piano_roll_slice_sum > 1] = 1
+            word_to_notes[word_num] = piano_roll_slice_sum
+
+    # create seq of word_to_notes
+    seed_melody_features_seq = np.empty((num_words_to_generate, seq_length, 107))
+
+    for seq_num in range(num_words_to_generate):
+        start = seq_num - seq_length + 1
+        if start >= 1:
+            seq = word_to_notes[seq_num:seq_num + seq_length]
+            seed_melody_features_seq[seq_num] = seq
+        else:
+            seq = np.zeros((seq_length, 107))
+            for i in range(seq_length + start):
+                seq_index = i-start
+                seq[seq_index] = word_to_notes[i]
+            seed_melody_features_seq[seq_num] = seq
+
+    # generate new text
+    generated = generate_seq_with_melody_v2(model, tokenizer, seed_text, seq_length, encoded_text_seq, seed_melody_features_seq)
     print(generated)
 
 
@@ -521,33 +603,41 @@ def main():
 
     # add melody to train, val and test data
     x_train = [x_train, m_train]
-    # x_val = [x_val, m_val]
-    # x_test = [x_test, m_test]
+    x_val = [x_val, m_val]
+    x_test = [x_test, m_test]
 
-    # model = get_LSTM_model_2(vocab_size, seq_length, embedding_matrix)
-    # model.summary()
+    model = get_LSTM_model_2(vocab_size, seq_length, embedding_matrix)
+    model.summary()
 
-    # model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
+    model.compile(optimizer='adam', loss='categorical_crossentropy', metrics=['accuracy'])
 
     # Create callbacks
-    # callbacks = [
-    #     EarlyStopping(monitor='val_loss', patience=5),
-    #     ModelCheckpoint(filepath='model.{epoch:02d}-{val_loss:.2f}.h5', save_best_only=True, save_weights_only=True)
-    # ]
+    callbacks = [
+        EarlyStopping(monitor='val_loss', patience=5),
+        ModelCheckpoint(filepath='model.{epoch:02d}-{val_loss:.2f}.h5', save_best_only=True, save_weights_only=True)
+    ]
 
     # history = model.fit(x_train, y_train,
     #                     batch_size=2048, epochs=150,
     #                     callbacks=callbacks,
     #                     validation_data=(x_val, y_val))
 
-    # model.load_weights("ass3_data" + path_separator + 'model_weights_final.h5')
+    model.load_weights("ass3_data" + path_separator + 'model_weights' + path_separator + 'v2' + path_separator + 'model_weights.h5')
     # score = model.evaluate(x_test, y_test, batch_size=2048)
     # print(score)
 
-    # generate_song_lyrics_with_melody(word_index, seq_length, model, tokenizer,
-    #                      all_songs_artists,
-    #                      all_songs_names,
-    #                      all_songs_melodies)
+    # generate_song_lyrics_with_melody_v1(word_index, seq_length, model, tokenizer,
+    #                                     all_songs_artists,
+    #                                     all_songs_names,
+    #                                     all_songs_melodies,
+    #                                     num_words_to_generate=50)
+
+    generate_song_lyrics_with_melody_v2(word_index, seq_length, model, tokenizer,
+                                        all_songs_artists,
+                                        all_songs_names,
+                                        all_songs_melodies,
+                                        encoded_data,
+                                        num_words_to_generate=50)
 
 
 if __name__ == '__main__':
