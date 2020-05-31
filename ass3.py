@@ -318,24 +318,30 @@ def generate_song_lyrics(word_index, seq_length, model, tokenizer):
 
 
 def generate_song_lyrics_with_melody_v1(word_index, seq_length, model, tokenizer, all_songs_artists, all_songs_names,
-                                        all_songs_melodies, num_words_to_generate):
+                                        all_songs_melodies, encoded_data, seed_encode_word=None,
+                                        random_melody_index=None):
     # select a seed text
     # seed_text = all_songs_lyrics[randint(0, len(all_songs_lyrics))]
-    seed_encode_word = randint(0, len(word_index))
+    if seed_encode_word is None:
+        seed_encode_word = randint(0, len(word_index))
     seed_text = word_index[seed_encode_word]
     encoded_text_seq = np.zeros(seq_length)
     encoded_text_seq[seq_length - 1] = seed_encode_word
     encoded_text_seq = encoded_text_seq.reshape((1, len(encoded_text_seq)))
-    print(seed_text + '\n')
+    print("%s : %s" % (seed_encode_word, seed_text))
 
     # select random melody
-    random_melody_index = randint(0, len(all_songs_melodies))
+    if random_melody_index is None:
+        random_melody_index = randint(0, len(all_songs_melodies))
     seed_song_artist = all_songs_artists[random_melody_index]
     seed_song_name = all_songs_names[random_melody_index]
     print(seed_song_artist + " - " + seed_song_name)
 
     # extract melody features
     seed_melody = all_songs_melodies[random_melody_index]
+    songs_lyric = encoded_data[random_melody_index]
+    num_of_words = len(songs_lyric)
+    num_words_to_generate = num_of_words
     seed_melody_features = np.zeros(108)
     for instrument in seed_melody.instruments:
         for note in instrument.notes:
@@ -347,22 +353,25 @@ def generate_song_lyrics_with_melody_v1(word_index, seq_length, model, tokenizer
 
     # generate new text
     generated = generate_seq_with_melody_v1(model, tokenizer, seed_text, num_words_to_generate, encoded_text_seq, seed_melody_features_seq)
-    print(generated)
+    print(generated+'\n')
 
 
 def generate_song_lyrics_with_melody_v2(word_index, seq_length, model, tokenizer, all_songs_artists, all_songs_names,
-                                        all_songs_melodies, encoded_data, num_words_to_generate):
+                                        all_songs_melodies, encoded_data, seed_encode_word=None,
+                                        random_melody_index=None):
     # select a seed text
     # seed_text = all_songs_lyrics[randint(0, len(all_songs_lyrics))]
-    seed_encode_word = randint(0, len(word_index))
+    if seed_encode_word is None:
+        seed_encode_word = randint(0, len(word_index))
     seed_text = word_index[seed_encode_word]
     encoded_text_seq = np.zeros(seq_length)
     encoded_text_seq[seq_length - 1] = seed_encode_word
     encoded_text_seq = encoded_text_seq.reshape((1, len(encoded_text_seq)))
-    print(seed_text + '\n')
+    print("%s : %s" % (seed_encode_word, seed_text))
 
     # select random melody
-    random_melody_index = randint(0, len(all_songs_melodies))
+    if random_melody_index is None:
+        random_melody_index = randint(0, len(all_songs_melodies))
     seed_song_artist = all_songs_artists[random_melody_index]
     seed_song_name = all_songs_names[random_melody_index]
     print(seed_song_artist + " - " + seed_song_name)
@@ -371,6 +380,7 @@ def generate_song_lyrics_with_melody_v2(word_index, seq_length, model, tokenizer
     seed_melody = all_songs_melodies[random_melody_index]
     songs_lyric = encoded_data[random_melody_index]
     num_of_words = len(songs_lyric)
+    num_words_to_generate = num_of_words
     num_of_seq = num_of_words - seq_length
     # build word_to_notes_array
     word_to_notes = np.zeros((num_of_words, 107))
@@ -391,7 +401,7 @@ def generate_song_lyrics_with_melody_v2(word_index, seq_length, model, tokenizer
     for seq_num in range(num_words_to_generate):
         start = seq_num - seq_length + 1
         if start >= 1:
-            seq = word_to_notes[seq_num:seq_num + seq_length]
+            seq = word_to_notes[start-1:start - 1 + seq_length]
             seed_melody_features_seq[seq_num] = seq
         else:
             seq = np.zeros((seq_length, 107))
@@ -401,8 +411,8 @@ def generate_song_lyrics_with_melody_v2(word_index, seq_length, model, tokenizer
             seed_melody_features_seq[seq_num] = seq
 
     # generate new text
-    generated = generate_seq_with_melody_v2(model, tokenizer, seed_text, seq_length, encoded_text_seq, seed_melody_features_seq)
-    print(generated)
+    generated = generate_seq_with_melody_v2(model, tokenizer, seed_text, num_words_to_generate, encoded_text_seq, seed_melody_features_seq)
+    print(generated+'\n')
 
 
 def load_midi_files(load_pickle, songs_artists, songs_names):
@@ -588,7 +598,6 @@ def main():
 
     # create a weight matrix for lyrics words.
     embedding_matrix = create_embedding_matrix(vocab_size, word_index, embeddings_dict)
-
     # prepare data for the model.
     val_data_percentage = 0.2
     x_train, x_val, x_test, y_train, y_val, y_test = prepare_data(encoded_data, len(train_songs_lyrics), vocab_size,
@@ -626,18 +635,31 @@ def main():
     # score = model.evaluate(x_test, y_test, batch_size=2048)
     # print(score)
 
-    # generate_song_lyrics_with_melody_v1(word_index, seq_length, model, tokenizer,
-    #                                     all_songs_artists,
-    #                                     all_songs_names,
-    #                                     all_songs_melodies,
-    #                                     num_words_to_generate=50)
+    # np.random.seed(1)
+    seed_encode_words = [5640, 2088, 4764]
+    for i in range(3):
+        #  choose random word
+        # seed_encode_word = randint(0, len(word_index))
+        seed_encode_word = seed_encode_words[i]
+        for j in range(5):
+            #  generate lyrics for each of the test melodies
 
-    generate_song_lyrics_with_melody_v2(word_index, seq_length, model, tokenizer,
-                                        all_songs_artists,
-                                        all_songs_names,
-                                        all_songs_melodies,
-                                        encoded_data,
-                                        num_words_to_generate=50)
+            # generate_song_lyrics_with_melody_v1(word_index, seq_length, model, tokenizer,
+            #                                     all_songs_artists,
+            #                                     all_songs_names,
+            #                                     all_songs_melodies,
+            #                                     encoded_data,
+            #                                     seed_encode_word=seed_encode_word,
+            #                                     random_melody_index=600+j)
+
+
+            generate_song_lyrics_with_melody_v2(word_index, seq_length, model, tokenizer,
+                                                all_songs_artists,
+                                                all_songs_names,
+                                                all_songs_melodies,
+                                                encoded_data,
+                                                seed_encode_word=seed_encode_word,
+                                                random_melody_index=600+j)
 
 
 if __name__ == '__main__':
