@@ -18,6 +18,13 @@ path_separator = os.path.sep
 
 
 def get_LSTM_model(num_words, seq_length, embedding_matrix):
+    """
+    Returns the lstm model.(version without melody features)
+    :param num_words: number of words for input dim.
+    :param seq_length: sequence length.
+    :param embedding_matrix: matrix for the embedding layer.
+    :return: the lstm model.
+    """
     model = Sequential()
 
     # Embedding layer
@@ -55,7 +62,15 @@ def get_LSTM_model(num_words, seq_length, embedding_matrix):
 
 def get_LSTM_model_2(num_words, seq_length, embedding_matrix, lyrics_input_shape=(50,),
                      melody_features_shape=(50, 107)):
-
+    """
+    Returns the lstm model.
+    :param num_words: number of words for input dim.
+    :param seq_length: sequence length.
+    :param embedding_matrix: matrix for the embedding layer.
+    :param lyrics_input_shape: lyrics input shape.
+    :param melody_features_shape: melody features shape.
+    :return: the lstm model.
+    """
     # Define the tensors for the two input
     lyrics_input = Input(lyrics_input_shape)
     melody_features_input = Input(melody_features_shape)
@@ -101,6 +116,12 @@ def get_LSTM_model_2(num_words, seq_length, embedding_matrix, lyrics_input_shape
 
 
 def get_embeddings_dict(load_pickle):
+    """
+    Returnes the words embedding dictionary.
+    :param load_pickle: boolean, if true then load dictionary from generated pickle file, else create dictionary
+     and save to pickle file.
+    :return: the words embedding dictionary.
+    """
     embeddings_dict = {}
     embeddings_dict_path = "ass3_data" + path_separator + "pickle" + path_separator + "embeddings_dict.pickle"
 
@@ -126,6 +147,13 @@ def get_embeddings_dict(load_pickle):
 
 
 def load_data_set(data_type, load_pickle):
+    """
+    Loads and returns the input data type set.
+    :param data_type: train or test
+    :param load_pickle: boolean, if true load the data from pickle file,
+     else build the data and save it to a pickle file.
+    :return: the input data type set.
+    """
     songs_artists = []
     songs_names = []
     songs_lyrics = []
@@ -165,6 +193,11 @@ def load_data_set(data_type, load_pickle):
 
 
 def convert_words_to_integers(data):
+    """
+    Using keras_preprocessing.text tokenizer to tokenizer the input data and returns it.
+    :param data: data to tokenizer.
+    :return: encoded data by the tokenizer.
+    """
     # prepare tokenizer
     tokenizer = Tokenizer(num_words=None,
                           filters='!"#$%&()*+,-./:;<=>?@[\\]^_`{|}~\t\n',
@@ -179,6 +212,13 @@ def convert_words_to_integers(data):
 
 
 def create_embedding_matrix(vocab_size, word_index, embeddings_dict):
+    """
+    Create embedding matrix for the embedding layer to use.
+    :param vocab_size: size of the vocabulary.
+    :param word_index: word to index dictionary.
+    :param embeddings_dict: dictionary of embedding for words.
+    :return: The created embedding matrix.
+    """
     embedding_matrix = np.zeros((vocab_size, 300))
     for i, word in word_index.items():
         embedding_vector = embeddings_dict.get(word)
@@ -188,6 +228,13 @@ def create_embedding_matrix(vocab_size, word_index, embeddings_dict):
 
 
 def separate_data(encoded_data, vocab_size, seq_length):
+    """
+    Separate the encoded data into sequences of input seq length and divide into features and labels.
+    :param encoded_data: the encoded data.
+    :param vocab_size: size of the vocabulary.
+    :param seq_length: sequence length.
+    :return: the Separated features and labels as one shot vectors.
+    """
     features = []
     labels = []
     for seq in encoded_data:
@@ -210,6 +257,15 @@ def separate_data(encoded_data, vocab_size, seq_length):
 
 
 def prepare_data(encoded_data, train_size, vocab_size, seq_length, val_data_percentage):
+    """
+    Prepare data for the training of the model.
+    :param encoded_data: the encoded data.
+    :param train_size: train set size.
+    :param vocab_size: the vocabulary size.
+    :param seq_length: sequence length.
+    :param val_data_percentage: validation data set percentage.
+    :return: x_train, x_val, x_test, y_train, y_val, y_test.
+    """
     # split data to train and test
     train_encoded_data, test_encoded_data = encoded_data[:train_size], encoded_data[train_size:]
 
@@ -227,6 +283,15 @@ def prepare_data(encoded_data, train_size, vocab_size, seq_length, val_data_perc
 
 
 def generate_seq(model, tokenizer, seed_text, n_words, encoded):
+    """
+    Generate song lyrics from seed text.
+    :param model: the LSTM model.
+    :param tokenizer: the tokenizer used on the data.
+    :param seed_text: the seed text word to start generating from.
+    :param n_words: number of words to generate.
+    :param encoded: encoded sequence of the seed text word.
+    :return: Generated song lyrics.
+    """
     result = list()
     result.append(seed_text)
     in_text = seed_text
@@ -253,6 +318,16 @@ def generate_seq(model, tokenizer, seed_text, n_words, encoded):
 
 
 def generate_seq_with_melody_v1(model, tokenizer, seed_text, n_words, encoded, melody_features_seq):
+    """
+    Generate song lyrics from seed text and melody features extracted with first method.
+    :param model: the LSTM model.
+    :param tokenizer: the tokenizer used on the data.
+    :param seed_text: the seed text word to start generating from.
+    :param n_words: number of words to generate.
+    :param encoded: encoded sequence of the seed text word.
+    :param melody_features_seq: melody features sequence.
+    :return: Generated song lyrics.
+    """
     result = list()
     result.append(seed_text)
     # generate a fixed number of words
@@ -278,6 +353,16 @@ def generate_seq_with_melody_v1(model, tokenizer, seed_text, n_words, encoded, m
 
 
 def generate_seq_with_melody_v2(model, tokenizer, seed_text, n_words, encoded, melody_features_seq):
+    """
+    Generate song lyrics from seed text and melody features extracted with second method.
+    :param model: the LSTM model.
+    :param tokenizer: the tokenizer used on the data.
+    :param seed_text: the seed text word to start generating from.
+    :param n_words: number of words to generate.
+    :param encoded: encoded sequence of the seed text word.
+    :param melody_features_seq: melody features sequence.
+    :return: Generated song lyrics.
+    """
     result = list()
     result.append(seed_text)
     # generate a fixed number of words
@@ -303,6 +388,14 @@ def generate_seq_with_melody_v2(model, tokenizer, seed_text, n_words, encoded, m
 
 
 def generate_song_lyrics(word_index, seq_length, model, tokenizer):
+    """
+    Generate song lyrics from random seed text.
+    :param word_index: dictionary of words indices.
+    :param seq_length: sequence length.
+    :param model: the LSTM model.
+    :param tokenizer: the tokenizer used on the data.
+    :return: Generated song lyrics.
+    """
     # select a seed text
     # seed_text = all_songs_lyrics[randint(0, len(all_songs_lyrics))]
     seed_encode_word = randint(0, len(word_index))
@@ -320,6 +413,21 @@ def generate_song_lyrics(word_index, seq_length, model, tokenizer):
 def generate_song_lyrics_with_melody_v1(word_index, seq_length, model, tokenizer, all_songs_artists, all_songs_names,
                                         all_songs_melodies, encoded_data, seed_encode_word=None,
                                         random_melody_index=None):
+    """
+    Generate song lyrics from input seed encoded word and melody index(choose both randomly if None).
+    Using method 1 for melody features extraction.
+    :param word_index: dictionary of words indices.
+    :param seq_length: sequence length.
+    :param model: the LSTM model.
+    :param tokenizer: the tokenizer used on the data.
+    :param all_songs_artists: list of artists of all songs.
+    :param all_songs_names: list of names of all songs.
+    :param all_songs_melodies: list of melodies of all songs.
+    :param encoded_data: the encoded data.
+    :param seed_encode_word: seed encoded word to start generating lyrics from. if None then choose randomly.
+    :param random_melody_index: seed melody index to base generating lyrics. if None then choose randomly.
+    :return: Generated song lyrics.
+    """
     # select a seed text
     # seed_text = all_songs_lyrics[randint(0, len(all_songs_lyrics))]
     if seed_encode_word is None:
@@ -359,6 +467,21 @@ def generate_song_lyrics_with_melody_v1(word_index, seq_length, model, tokenizer
 def generate_song_lyrics_with_melody_v2(word_index, seq_length, model, tokenizer, all_songs_artists, all_songs_names,
                                         all_songs_melodies, encoded_data, seed_encode_word=None,
                                         random_melody_index=None):
+    """
+    Generate song lyrics from input seed encoded word and melody index(choose both randomly if None).
+    Using method 2 for melody features extraction.
+    :param word_index: dictionary of words indices.
+    :param seq_length: sequence length.
+    :param model: the LSTM model.
+    :param tokenizer: the tokenizer used on the data.
+    :param all_songs_artists: list of artists of all songs.
+    :param all_songs_names: list of names of all songs.
+    :param all_songs_melodies: list of melodies of all songs.
+    :param encoded_data: the encoded data.
+    :param seed_encode_word: seed encoded word to start generating lyrics from. if None then choose randomly.
+    :param random_melody_index: seed melody index to base generating lyrics. if None then choose randomly.
+    :return: Generated song lyrics.
+    """
     # select a seed text
     # seed_text = all_songs_lyrics[randint(0, len(all_songs_lyrics))]
     if seed_encode_word is None:
@@ -416,6 +539,13 @@ def generate_song_lyrics_with_melody_v2(word_index, seq_length, model, tokenizer
 
 
 def load_midi_files(load_pickle, songs_artists, songs_names):
+    """
+    Loads and return all songs melodies.
+    :param load_pickle: if true loads from pickle saved file. else loads from data files and saves to pickle file.
+    :param songs_artists: all songs artists.
+    :param songs_names: all songs names.
+    :return: all songs melodies.
+    """
     all_songs_melodies = []
     pickle_file_path = "ass3_data" + path_separator + "pickle" + path_separator + "midi_files" + ".pickle"
 
@@ -449,9 +579,17 @@ def load_midi_files(load_pickle, songs_artists, songs_names):
 
 
 def extract_melody_features(all_songs_melodies, total_dataset_size, seq_length, encoded_data):
-    # the features for the melody are a vector of size 88 notes (0 or 1) and melody tempo total size of 89.
-    # note number to name can be found at https://newt.phys.unsw.edu.au/jw/notes.html
-
+    """
+    Extract and return all songs melodies features using method 1.
+    Method 1 features for the melody are a vector of size 107 for all notes appearing in all of the song(0 or 1)
+     and melody tempo total size of 108.
+    Note number to name can be found at https://newt.phys.unsw.edu.au/jw/notes.html.
+    :param all_songs_melodies: all songs melodies.
+    :param total_dataset_size: total size of the dataset of sequences.
+    :param seq_length: sequence length.
+    :param encoded_data: the encoded data.
+    :return: all songs melodies features.
+    """
     melody_features = np.zeros((len(all_songs_melodies), 108))  # test shape is (5, 108)
     for i in range(len(all_songs_melodies)):
         melody = all_songs_melodies[i]
@@ -479,9 +617,17 @@ def extract_melody_features(all_songs_melodies, total_dataset_size, seq_length, 
 
 
 def extract_melody_features_per_seq(all_songs_melodies, total_dataset_size, seq_length, encoded_data):
-    # the features for the melody are a vector of size 88 notes (0 or 1) and melody tempo total size of 89.
-    # note number to name can be found at https://newt.phys.unsw.edu.au/jw/notes.html
-
+    """
+    Extract and return all songs melodies features using method 2.
+    Method 2 features for the melody are computed per word. they are a vector of size 107 for all notes appearing
+     in the overall position of the word in the lyrics of the song(0 or 1).
+    Note number to name can be found at https://newt.phys.unsw.edu.au/jw/notes.html.
+    :param all_songs_melodies: all songs melodies.
+    :param total_dataset_size: total size of the dataset of sequences.
+    :param seq_length: sequence length.
+    :param encoded_data: the encoded data.
+    :return: all songs melodies features per sequence.
+    """
     all_melody_features_per_seq = np.empty((total_dataset_size, 50, 107))  # test shape is (909, 50, 108)
     ctr = 0
     for i in range(len(all_songs_melodies)):
@@ -513,6 +659,13 @@ def extract_melody_features_per_seq(all_songs_melodies, total_dataset_size, seq_
 
 
 def separate_melody_data(melody_features, songs_lyrics, seq_length):
+    """
+    Separate and return melody features for the song lyrics.
+    :param melody_features: the melody features.
+    :param songs_lyrics: songs lyrics.
+    :param seq_length: the sequence length.
+    :return: Melody features for the song lyrics.
+    """
     melody_features_seq = melody_features[0]
 
     songs_lyric = songs_lyrics[0]
@@ -527,6 +680,13 @@ def separate_melody_data(melody_features, songs_lyrics, seq_length):
 
 
 def train_val_split(train, val_data_percentage, random_seed):
+    """
+    Split train data into train and validation sets by the input validation percentage.
+    :param train: the training data.
+    :param val_data_percentage: validation percentage.
+    :param random_seed: random to seed to use, in order to replicate results.
+    :return: train and validation sets.
+    """
     np.random.seed(random_seed)
     np.random.shuffle(train)
     val_index = int(len(train)*val_data_percentage)
@@ -536,6 +696,17 @@ def train_val_split(train, val_data_percentage, random_seed):
 
 def prepare_melody_data(train_size, val_data_percentage, all_songs_melodies, total_dataset_size, seq_length,
                         encoded_data, load_data):
+    """
+    Prepare melody data for the model training.
+    :param train_size: the training size.
+    :param val_data_percentage: validation data percentage.
+    :param all_songs_melodies: all songs melodies.
+    :param total_dataset_size: total dataset size of sequences.
+    :param seq_length: sequence length.
+    :param encoded_data: the encoded data.
+    :param load_data: if true loads data from npz files, else prepare the data and save to npz files.
+    :return: melody train, melody validation, and melody test data.
+    """
     npz_train_file_path = "ass3_data" + path_separator + "npz" + path_separator + "melody_train_data" + ".npz"
     npz_val_file_path = "ass3_data" + path_separator + "npz" + path_separator + "melody_val_data" + ".npz"
     npz_test_file_path = "ass3_data" + path_separator + "npz" + path_separator + "melody_test_data" + ".npz"
