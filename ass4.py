@@ -1,7 +1,6 @@
 import os
 import time
 
-from keras import Input, Model
 from scipy.io import arff
 import numpy as np
 import tensorflow as tf
@@ -145,10 +144,10 @@ def part1():
     # Define the GAN and training parameters.
     # size of the noise space
     noise_dim = 32
-    # create the discriminator
-    discriminator = define_discriminator()
-    # create the generator
     output_shape = len(data[0])
+    # create the discriminator
+    discriminator = define_discriminator(output_shape)
+    # create the generator
     generator = define_generator(noise_dim, output_shape)
     # create the gan
     gan_model = define_gan(generator, discriminator)
