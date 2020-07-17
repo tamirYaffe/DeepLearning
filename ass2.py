@@ -183,14 +183,14 @@ def main():
     np.random.seed(64)
 
     # Load local files dataset (same directory )
-    x_train, y_train = load_dataset(dataset_type="train")
-    x_test, y_test = load_dataset(dataset_type="test")
+    # x_train, y_train = load_dataset(dataset_type="train")
+    # x_test, y_test = load_dataset(dataset_type="test")
 
     # with pickle files
-    # with open('trainShuffled.pickle', 'rb') as f:
-    #     x_train, y_train = pickle.load(f)
-    # with open('test.pickle', 'rb') as f:
-    #     x_test, y_test = pickle.load(f)
+    with open('ass2_data' + path_separator + 'trainShuffled.pickle', 'rb') as f:
+        x_train, y_train = pickle.load(f)
+    with open('ass2_data' + path_separator + 'test.pickle', 'rb') as f:
+        x_test, y_test = pickle.load(f)
 
     # Colab
     # with open('/content/drive/My Drive/trainShuffled.pickle', 'rb') as f:
