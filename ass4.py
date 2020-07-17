@@ -180,6 +180,7 @@ def train(data, g_model, d_model, gan_model, noise_dim, epochs, batch_size):
         print()
         history['d_loss'].append(d_loss)
         history['g_loss'].append(g_loss)
+    # todo: create callbacks for saving best weights and for early stop
     return history
 
 
@@ -205,7 +206,8 @@ def part1():
     gan_model = define_gan(generator, discriminator)
 
     # Training the GAN model.
-    train(transformed_data, generator, discriminator, gan_model, noise_dim, epochs=10, batch_size=128)
+    train(transformed_data, generator, discriminator, gan_model, noise_dim, epochs=20, batch_size=128)
+    # todo: save models weights to files.
 
 
 def main():
