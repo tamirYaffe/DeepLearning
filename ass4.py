@@ -1,11 +1,13 @@
 import os
 import time
+
+from keras import Input, Model
 from scipy.io import arff
 import numpy as np
 import tensorflow as tf
 from numpy import vstack
 from keras.models import Sequential
-from keras.layers import Dense
+from keras.layers import Dense, Dropout
 
 path_separator = os.path.sep
 
@@ -43,20 +45,25 @@ def data_transformation(data, meta):
     return transformed_data
 
 
-def define_discriminator(n_inputs=2):
+# define the standalone generator model
+def define_generator(noise_dim, output_shape):
     model = Sequential()
-    model.add(Dense(25, activation='relu', kernel_initializer='he_uniform', input_dim=n_inputs))
-    model.add(Dense(1, activation='sigmoid'))
-    # compile model
-    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
+    model.add(Dense(15, activation='relu', kernel_initializer='he_uniform', input_dim=noise_dim))
+    model.add(Dense(output_shape, activation='linear'))
     return model
 
 
-# define the standalone generator model
-def define_generator(latent_dim, n_outputs=2):
+def define_discriminator(input_shape):
     model = Sequential()
-    model.add(Dense(15, activation='relu', kernel_initializer='he_uniform', input_dim=latent_dim))
-    model.add(Dense(n_outputs, activation='linear'))
+    model.add(Dense(128, activation='relu', kernel_initializer='he_uniform', input_dim=input_shape))
+    model.add(Dropout(0.1))
+    model.add(Dense(64, activation='relu'))
+    model.add(Dropout(0.1))
+    model.add(Dense(32, activation='relu'))
+    model.add(Dense(1, activation='sigmoid'))
+
+    # compile model
+    model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
     return model
 
 
@@ -90,10 +97,9 @@ def data_batch(data, batch_size, batch_num):
 
 # generate batch_size of real samples with class labels
 def real_samples_batch(data, batch_size, batch_num):
-    # generate inputs in [-0.5, 0.5]
     x = data_batch(data, batch_size, batch_num)
     # generate class labels
-    y = np.ones((batch_size, 1))
+    y = np.ones((len(x), 1))
     return x, y
 
 
@@ -115,11 +121,11 @@ def train(data, g_model, d_model, gan_model, noise_dim, epochs, batch_size):
         # prepare real samples
         x_real, y_real = real_samples_batch(data, half_batch_size, i)
         # prepare fake examples
-        x_fake, y_fake = generate_fake_samples(g_model, noise_dim, half_batch_size)
+        x_fake, y_fake = generate_fake_samples(g_model, noise_dim, len(x_real))
         # update discriminator
         d_model.train_on_batch(x_real, y_real)
         d_model.train_on_batch(x_fake, y_fake)
-        # prepare points in latent space as input for the generator
+        # generate noise as input for the generator
         noise = tf.random.normal((batch_size, noise_dim))
         x_gan = noise
         # create inverted labels for the fake samples
@@ -138,19 +144,17 @@ def part1():
 
     # Define the GAN and training parameters.
     # size of the noise space
-    noise_dim = 5
+    noise_dim = 32
     # create the discriminator
     discriminator = define_discriminator()
     # create the generator
-    generator = define_generator(noise_dim)
+    output_shape = len(data[0])
+    generator = define_generator(noise_dim, output_shape)
     # create the gan
     gan_model = define_gan(generator, discriminator)
 
-    epochs = 255
-    batch_size = 128
-
     # Training the GAN model.
-    train(transformed_data, generator, discriminator, gan_model, noise_dim, epochs, batch_size)
+    train(transformed_data, generator, discriminator, gan_model, noise_dim, epochs=509, batch_size=128)
 
 
 def main():
