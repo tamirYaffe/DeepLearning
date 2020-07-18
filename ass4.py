@@ -10,6 +10,7 @@ from keras.models import Sequential
 from keras.layers import Dense, Dropout, Concatenate
 
 path_separator = os.path.sep
+saved_models_path = "ass4_data" + path_separator + "models" + path_separator
 
 
 def data_transformation(data, meta):
@@ -145,13 +146,15 @@ def print_progress(iterations, i, d_loss, g_loss, batch_size, total_samples):
     sys.stdout.write("\r%d/%d [%s] - d_loss: %f - g_loss: %f" % (samples_covered, total_samples, bar, d_loss, g_loss))
 
 
-def train(data, g_model, d_model, gan_model, noise_dim, epochs, batch_size):
+def train(data, g_model, d_model, gan_model, noise_dim, epochs, batch_size, early_stop):
     # determine half the size of one batch, for updating the discriminator
     half_batch_size = int(batch_size / 2)
     iterations = int(len(data)/half_batch_size)
     if len(data) % batch_size != 0:
         iterations = iterations + 1
     history = {'d_loss': [], 'g_loss': []}
+    min_joint_loss = float('inf')
+    joint_loss_improvement_ctr = 0
     # manually enumerate epochs
     for epoch in range(epochs):
         print("Epoch (%d/%d)" % (epoch+1, epochs))
@@ -176,11 +179,24 @@ def train(data, g_model, d_model, gan_model, noise_dim, epochs, batch_size):
             g_loss = gan_model.train_on_batch(x_gan, y_gan)
             # if (i+1) % 50 == 0:
             print_progress(iterations, i, d_loss, g_loss, half_batch_size, len(data))
-        print_progress(iterations, iterations, d_loss, g_loss, half_batch_size, len(data))
+
+        # saving best model and early stop
+        joint_loss = g_loss + d_loss
+        if min_joint_loss > joint_loss:
+            joint_loss_improvement_ctr = 0
+            min_joint_loss = joint_loss
+            d_model.save(saved_models_path + "discriminator")
+            g_model.save(saved_models_path + "generator")
+        else:
+            joint_loss_improvement_ctr += 1
+            if joint_loss_improvement_ctr == early_stop:
+                print()
+                return history
+
+        # print_progress(iterations, iterations, d_loss, g_loss, half_batch_size, len(data))
         print()
         history['d_loss'].append(d_loss)
         history['g_loss'].append(g_loss)
-    # todo: create callbacks for saving best weights and for early stop
     return history
 
 
@@ -198,16 +214,17 @@ def part1():
     output_shape = len(transformed_data[0])
     # create the discriminator
     discriminator = define_discriminator(output_shape)
-    discriminator.summary()
+    # discriminator.summary()
+
     # create the generator
     generator = define_generator(noise_dim, meta)
-    generator.summary()
+    # generator.summary()
+
     # create the gan
     gan_model = define_gan(generator, discriminator)
 
     # Training the GAN model.
-    train(transformed_data, generator, discriminator, gan_model, noise_dim, epochs=20, batch_size=128)
-    # todo: save models weights to files.
+    train(transformed_data, generator, discriminator, gan_model, noise_dim, epochs=20, batch_size=128, early_stop=3)
 
 
 def main():
