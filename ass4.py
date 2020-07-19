@@ -1,16 +1,22 @@
 import os
 import sys
 import time
-
 from keras import Input, Model
 from scipy.io import arff
 import numpy as np
 from numpy import vstack
-from keras.models import Sequential
-from keras.layers import Dense, Dropout, Concatenate
+from keras.models import Sequential, load_model
+from keras.layers import Dense, Dropout, Concatenate, LeakyReLU
+import matplotlib.pyplot as plt
+from keras import backend
 
 path_separator = os.path.sep
 saved_models_path = "ass4_data" + path_separator + "models" + path_separator
+
+
+# implementation of wasserstein loss
+def wasserstein_loss(y_true, y_pred):
+    return backend.mean(y_true * y_pred)
 
 
 def data_transformation(data, meta):
@@ -49,15 +55,24 @@ def data_transformation(data, meta):
 # define the standalone generator model
 def define_generator(noise_dim, meta):
     input_layer = Input(shape=(noise_dim,))
-    x = Dense(32, activation='relu')(input_layer)
-    x = Dense(64, activation='relu')(x)
-    x = Dense(128, activation='relu')(x)
+    x = Dense(32, activation="relu")(input_layer)
+    # x = Dense(32)(input_layer)
+    # x = LeakyReLU(alpha=0.1)(x)
+    # x = Dropout(0.1)(x)
+    x = Dense(64, activation="relu")(x)
+    # x = Dense(64)(x)
+    # x = LeakyReLU(alpha=0.1)(x)
+    # x = Dropout(0.1)(x)
+    x = Dense(128)(x)
+    x = LeakyReLU(alpha=0.1)(x)
 
     attr_layers = []
     for attr in meta:
         attr_type = meta[attr][0]
         if attr_type is 'numeric':
-            attr_layer = Dense(1, activation='relu')(x)
+            attr_layer = Dense(1, activation="relu")(x)
+            # attr_layer = Dense(1)(x)
+            # attr_layer = LeakyReLU(alpha=0.1)(attr_layer)
         else:
             attr_range = len(meta[attr][1])
             attr_layer = Dense(attr_range, activation='softmax')(x)
@@ -71,11 +86,17 @@ def define_generator(noise_dim, meta):
 
 def define_discriminator(input_shape):
     model = Sequential()
-    model.add(Dense(128, activation='relu', kernel_initializer='he_uniform', input_dim=input_shape))
+    model.add(Dense(128, activation="relu", kernel_initializer='he_uniform', input_dim=input_shape))
+    # model.add(Dense(128, kernel_initializer='he_uniform', input_dim=input_shape))
+    # model.add(LeakyReLU(alpha=0.1))
     model.add(Dropout(0.1))
-    model.add(Dense(64, activation='relu'))
+    model.add(Dense(64, activation="relu"))
+    # model.add(Dense(64))
+    # model.add(LeakyReLU(alpha=0.1))
     model.add(Dropout(0.1))
-    model.add(Dense(32, activation='relu'))
+    model.add(Dense(32, activation="relu"))
+    # model.add(Dense(32))
+    # model.add(LeakyReLU(alpha=0.1))
     model.add(Dense(1, activation='sigmoid'))
 
     # compile model
@@ -177,7 +198,9 @@ def train(data, g_model, d_model, gan_model, noise_dim, epochs, batch_size, earl
             y_gan = np.ones((batch_size, 1))
             # update the generator via the discriminator's error
             g_loss = gan_model.train_on_batch(x_gan, y_gan)
-            # if (i+1) % 50 == 0:
+            if (i+1) % 100 == 0:
+                history['d_loss'].append(d_loss)
+                history['g_loss'].append(g_loss)
             print_progress(iterations, i, d_loss, g_loss, half_batch_size, len(data))
 
         # saving best model and early stop
@@ -193,11 +216,22 @@ def train(data, g_model, d_model, gan_model, noise_dim, epochs, batch_size, earl
                 print()
                 return history
 
-        # print_progress(iterations, iterations, d_loss, g_loss, half_batch_size, len(data))
+        # history['d_loss'].append(d_loss)
+        # history['g_loss'].append(g_loss)
         print()
-        history['d_loss'].append(d_loss)
-        history['g_loss'].append(g_loss)
     return history
+
+
+def plot_history(history, y_scale):
+    # Plot training loss values
+    plt.plot(history['d_loss'])
+    plt.plot(history['g_loss'])
+    plt.title('Model loss')
+    plt.ylabel('Loss')
+    plt.xlabel('Epoch')
+    plt.legend(['discriminator loss', 'generator loss'], loc='upper right')
+    plt.yscale(y_scale)
+    plt.show()
 
 
 def part1():
@@ -224,11 +258,26 @@ def part1():
     gan_model = define_gan(generator, discriminator)
 
     # Training the GAN model.
-    train(transformed_data, generator, discriminator, gan_model, noise_dim, epochs=20, batch_size=128, early_stop=3)
+    history = train(transformed_data, generator, discriminator, gan_model, noise_dim,
+                    epochs=25, batch_size=128, early_stop=5)
+    plot_history(history, y_scale="linear")
+    plot_history(history, y_scale="log")
+
+
+def part1_eval():
+    discriminator = load_model(saved_models_path+"discriminator")
+    generator = load_model(saved_models_path+"generator")
+    noise_dim = 32
+
+    x_fake, y_fake = generate_fake_samples(generator, noise_dim, 100)
+    prediction = discriminator.predict(x_fake)
+    print(x_fake)
+    print(prediction)
 
 
 def main():
     part1()
+    # part1_eval()
 
 
 if __name__ == '__main__':
