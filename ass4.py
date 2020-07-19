@@ -5,8 +5,8 @@ from keras import Input, Model
 from scipy.io import arff
 import numpy as np
 from numpy import vstack
-from keras.models import Sequential, load_model
-from keras.layers import Dense, Dropout, Concatenate, LeakyReLU
+from keras.models import Sequential
+from keras.layers import Dense, Dropout, Concatenate, LeakyReLU, BatchNormalization
 import matplotlib.pyplot as plt
 from keras import backend
 
@@ -57,14 +57,18 @@ def define_generator(noise_dim, meta):
     input_layer = Input(shape=(noise_dim,))
     x = Dense(32, activation="relu")(input_layer)
     # x = Dense(32)(input_layer)
+    # x = BatchNormalization()(x)
     # x = LeakyReLU(alpha=0.1)(x)
-    # x = Dropout(0.1)(x)
+    # x = Dropout(0.4)(x)
     x = Dense(64, activation="relu")(x)
     # x = Dense(64)(x)
+    # x = BatchNormalization()(x)
     # x = LeakyReLU(alpha=0.1)(x)
-    # x = Dropout(0.1)(x)
-    x = Dense(128)(x)
-    x = LeakyReLU(alpha=0.1)(x)
+    # x = Dropout(0.5)(x)
+    x = Dense(128, activation="relu")(x)
+    # x = Dense(128)(x)
+    # x = BatchNormalization()(x)
+    # x = LeakyReLU(alpha=0.1)(x)
 
     attr_layers = []
     for attr in meta:
@@ -88,20 +92,24 @@ def define_discriminator(input_shape):
     model = Sequential()
     model.add(Dense(128, activation="relu", kernel_initializer='he_uniform', input_dim=input_shape))
     # model.add(Dense(128, kernel_initializer='he_uniform', input_dim=input_shape))
+    # model.add(BatchNormalization())
     # model.add(LeakyReLU(alpha=0.1))
     model.add(Dropout(0.1))
     model.add(Dense(64, activation="relu"))
     # model.add(Dense(64))
+    # model.add(BatchNormalization())
     # model.add(LeakyReLU(alpha=0.1))
     model.add(Dropout(0.1))
     model.add(Dense(32, activation="relu"))
     # model.add(Dense(32))
+    # model.add(BatchNormalization())
     # model.add(LeakyReLU(alpha=0.1))
     model.add(Dense(1, activation='sigmoid'))
+    # model.add(Dense(1))
 
     # compile model
-    # model.compile(loss='binary_crossentropy', optimizer='adam', metrics=['accuracy'])
     model.compile(loss='binary_crossentropy', optimizer='adam')
+    # model.compile(loss=wasserstein_loss, optimizer='sgd')
     return model
 
 
@@ -117,6 +125,7 @@ def define_gan(generator, discriminator):
     model.add(discriminator)
     # compile model
     model.compile(loss='binary_crossentropy', optimizer='adam')
+    # model.compile(loss=wasserstein_loss, optimizer='adam')
     return model
 
 
@@ -138,6 +147,7 @@ def real_samples_batch(data, batch_size, batch_num):
     x = data_batch(data, batch_size, batch_num)
     # generate class labels
     y = np.ones((len(x), 1))
+    # y = -np.ones((len(x), 1))
     return x, y
 
 
@@ -149,6 +159,7 @@ def generate_fake_samples(generator, noise_dim, n):
     x = generator.predict(noise)  # noise need to be nd array
     # create class labels
     y = np.zeros((n, 1))
+    # y = np.ones((n, 1))
     return x, y
 
 
@@ -189,7 +200,10 @@ def train(data, g_model, d_model, gan_model, noise_dim, epochs, batch_size, earl
             # update discriminator
             d_real_loss = d_model.train_on_batch(x_real, y_real)
             d_fake_loss = d_model.train_on_batch(x_fake, y_fake)
+
             d_loss = (d_real_loss + d_fake_loss)/2
+            # d_loss = d_real_loss - d_fake_loss
+
             # generate noise as input for the generator
             mu, sigma = 0.5, 0.1  # mean and standard deviation
             noise = np.random.normal(mu, sigma, (batch_size, noise_dim))
@@ -205,11 +219,12 @@ def train(data, g_model, d_model, gan_model, noise_dim, epochs, batch_size, earl
 
         # saving best model and early stop
         joint_loss = g_loss + d_loss
+        # joint_loss = d_loss
         if min_joint_loss > joint_loss:
             joint_loss_improvement_ctr = 0
             min_joint_loss = joint_loss
-            d_model.save(saved_models_path + "discriminator")
-            g_model.save(saved_models_path + "generator")
+            d_model.save_weights(saved_models_path + 'discriminator_weights.h5')
+            g_model.save_weights(saved_models_path + 'generator_weights.h5')
         else:
             joint_loss_improvement_ctr += 1
             if joint_loss_improvement_ctr == early_stop:
@@ -234,7 +249,7 @@ def plot_history(history, y_scale):
     plt.show()
 
 
-def part1():
+def part1(action):
     # Read the data.
     data_path = 'ass4_data' + path_separator + 'adult.arff'
     data, meta = arff.loadarff(data_path)
@@ -257,27 +272,25 @@ def part1():
     # create the gan
     gan_model = define_gan(generator, discriminator)
 
-    # Training the GAN model.
-    history = train(transformed_data, generator, discriminator, gan_model, noise_dim,
-                    epochs=25, batch_size=128, early_stop=5)
-    plot_history(history, y_scale="linear")
-    plot_history(history, y_scale="log")
+    if action is "train":
+        # Training the GAN model.
+        history = train(transformed_data, generator, discriminator, gan_model, noise_dim,
+                        epochs=10, batch_size=128, early_stop=5)
+        plot_history(history, y_scale="linear")
+        plot_history(history, y_scale="log")
 
-
-def part1_eval():
-    discriminator = load_model(saved_models_path+"discriminator")
-    generator = load_model(saved_models_path+"generator")
-    noise_dim = 32
-
-    x_fake, y_fake = generate_fake_samples(generator, noise_dim, 100)
-    prediction = discriminator.predict(x_fake)
-    print(x_fake)
-    print(prediction)
+    if action is "eval":
+        discriminator.load_weights(saved_models_path + 'discriminator_weights.h5')
+        generator.load_weights(saved_models_path + 'generator_weights.h5')
+        x_fake, y_fake = generate_fake_samples(generator, noise_dim, 100)
+        prediction = discriminator.predict(x_fake)
+        print(x_fake)
+        print(prediction)
 
 
 def main():
-    part1()
-    # part1_eval()
+    part1(action="train")
+    # part1(action="eval")
 
 
 if __name__ == '__main__':
