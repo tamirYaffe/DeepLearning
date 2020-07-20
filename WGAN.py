@@ -117,17 +117,20 @@ def define_discriminator(input_shape):
     const = ClipConstraint(0.01)
     model = Sequential()
     # model.add(Dense(128, activation="relu", kernel_initializer=init, input_dim=input_shape))
-    model.add(Dense(128, kernel_initializer=init, input_dim=input_shape, kernel_constraint=const))
+    # model.add(Dense(128, kernel_initializer=init, input_dim=input_shape, kernel_constraint=const))
+    model.add(Dense(128, kernel_initializer=init, input_dim=input_shape))
     model.add(BatchNormalization())
     model.add(LeakyReLU(alpha=0.2))
     model.add(Dropout(0.1))
     # model.add(Dense(64, activation="relu"))
-    model.add(Dense(64, kernel_constraint=const))
+    # model.add(Dense(64, kernel_constraint=const))
+    model.add(Dense(64))
     model.add(BatchNormalization())
     model.add(LeakyReLU(alpha=0.2))
     model.add(Dropout(0.1))
     # model.add(Dense(32, activation="relu"))
-    model.add(Dense(32, kernel_constraint=const))
+    # model.add(Dense(32, kernel_constraint=const))
+    model.add(Dense(32))
     model.add(BatchNormalization())
     model.add(LeakyReLU(alpha=0.2))
     # model.add(Dense(1, activation='sigmoid'))
@@ -258,8 +261,8 @@ def train(data, g_model, d_model, gan_model, noise_dim, epochs, batch_size, earl
         if min_joint_loss > joint_loss:
             joint_loss_improvement_ctr = 0
             min_joint_loss = joint_loss
-            d_model.save_weights(saved_models_path + 'discriminator_weights.h5')
-            g_model.save_weights(saved_models_path + 'generator_weights.h5')
+            d_model.save_weights(saved_models_path + 'w_discriminator_weights.h5')
+            g_model.save_weights(saved_models_path + 'w_generator_weights.h5')
         else:
             joint_loss_improvement_ctr += 1
             if joint_loss_improvement_ctr == early_stop:
@@ -285,9 +288,25 @@ def plot_history(history, y_scale):
     plt.show()
 
 
+def find_min_dist(x_fake, data):
+    min_dist = float('inf')
+    min_dist_line = 0
+    for i in range(len(data)):
+        line = data[i]
+        dist = 0
+        for j in range(len(line)):
+            dist += abs(line[j] - x_fake[0][j])
+        if dist < min_dist:
+            min_dist = dist
+            min_dist_line = line
+    return min_dist_line, min_dist
+
+
 def part1(action):
     # Read the data.
-    data_path = 'ass4_data' + path_separator + 'adult.arff'
+    database = 'adult.arff'
+    # database = 'bank-full.arff'
+    data_path = 'ass4_data' + path_separator + database
     data, meta = arff.loadarff(data_path)
 
     # apply the required data transformations.
@@ -316,8 +335,8 @@ def part1(action):
         # plot_history(history, y_scale="log")
 
     if action is "eval":
-        discriminator.load_weights(saved_models_path + 'discriminator_weights.h5')
-        generator.load_weights(saved_models_path + 'generator_weights.h5')
+        discriminator.load_weights(saved_models_path + 'w_discriminator_weights.h5')
+        generator.load_weights(saved_models_path + 'w_generator_weights.h5')
         x_fake, y_fake = generate_fake_samples(generator, noise_dim, 100)
         prediction = discriminator.predict(x_fake)
         x_real, y_real = real_samples_batch(transformed_data, 100, 0)
@@ -325,10 +344,17 @@ def part1(action):
         print(x_fake)
         print(prediction)
 
+    if action is "equal":
+        generator.load_weights(saved_models_path + 'w_generator_weights.h5')
+        x_fake, y_fake = generate_fake_samples(generator, noise_dim, 100)
+        line, dist = find_min_dist(x_fake, transformed_data)
+        print(dist)
+
 
 def main():
     part1(action="train")
     # part1(action="eval")
+    # part1(action="equal")
 
 
 if __name__ == '__main__':

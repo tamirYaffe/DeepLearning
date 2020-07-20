@@ -212,9 +212,9 @@ def train(data, g_model, d_model, gan_model, noise_dim, epochs, batch_size, earl
             y_gan = np.ones((batch_size, 1))
             # update the generator via the discriminator's error
             g_loss = gan_model.train_on_batch(x_gan, y_gan)
-            if (i+1) % 100 == 0:
-                history['d_loss'].append(d_loss)
-                history['g_loss'].append(g_loss)
+            # if (i+1) % 100 == 0:
+            history['d_loss'].append(d_loss)
+            history['g_loss'].append(g_loss)
             print_progress(iterations, i, d_loss, g_loss, half_batch_size, len(data))
 
         # saving best model and early stop
@@ -243,15 +243,44 @@ def plot_history(history, y_scale):
     plt.plot(history['g_loss'])
     plt.title('Model loss')
     plt.ylabel('Loss')
-    plt.xlabel('Epoch')
+    plt.xlabel('Iteration')
     plt.legend(['discriminator loss', 'generator loss'], loc='upper right')
     plt.yscale(y_scale)
     plt.show()
 
 
+def find_min_dist(x_fake, data):
+    min_dist = float('inf')
+    min_dist_line = 0
+    for i in range(len(data)):
+        line = data[i]
+        dist = 0
+        for j in range(len(line)):
+            dist += abs(line[j] - x_fake[0][j])
+        if dist < min_dist:
+            min_dist = dist
+            min_dist_line = i
+    return min_dist_line, min_dist
+
+
+def find_avg_dist(x_fake):
+    avg_dist = 0
+    for i in range(len(x_fake)):
+        dist = 0
+        for j in range(len(x_fake)):
+            for attr in range(len(x_fake[0])):
+                dist += abs(x_fake[i][attr] - x_fake[j][attr])
+        dist = dist/len(x_fake)
+        avg_dist += dist
+    avg_dist = avg_dist/len(x_fake)
+    return avg_dist
+
+
 def part1(action):
     # Read the data.
-    data_path = 'ass4_data' + path_separator + 'adult.arff'
+    database = 'adult.arff'
+    # database = 'bank-full.arff'
+    data_path = 'ass4_data' + path_separator + database
     data, meta = arff.loadarff(data_path)
 
     # apply the required data transformations.
@@ -275,7 +304,7 @@ def part1(action):
     if action is "train":
         # Training the GAN model.
         history = train(transformed_data, generator, discriminator, gan_model, noise_dim,
-                        epochs=10, batch_size=128, early_stop=5)
+                        epochs=20, batch_size=128, early_stop=5)
         plot_history(history, y_scale="linear")
         plot_history(history, y_scale="log")
 
@@ -287,10 +316,16 @@ def part1(action):
         print(x_fake)
         print(prediction)
 
+    if action is "equal":
+        generator.load_weights(saved_models_path + 'generator_weights.h5')
+        x_fake, y_fake = generate_fake_samples(generator, noise_dim, 100)
+        print(find_avg_dist(x_fake))
+
 
 def main():
     part1(action="train")
     # part1(action="eval")
+    # part1(action="equal")
 
 
 if __name__ == '__main__':
