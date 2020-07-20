@@ -9,6 +9,7 @@ from keras.models import Sequential
 from keras.layers import Dense, Dropout, Concatenate, LeakyReLU, BatchNormalization
 import matplotlib.pyplot as plt
 from keras import backend
+from numpy.random import randn
 
 path_separator = os.path.sep
 saved_models_path = "ass4_data" + path_separator + "models" + path_separator
@@ -153,11 +154,11 @@ def real_samples_batch(data, batch_size, batch_num):
 
 # use the generator to generate n fake examples, with class labels
 def generate_fake_samples(generator, noise_dim, n):
-    mu, sigma = 0.5, 0.1  # mean and standard deviation
-    noise = np.random.normal(mu, sigma, (n, noise_dim))
-    # predict outputs
+    # mu, sigma = 0.5, 0.1  # mean and standard deviation
+    # noise = np.random.normal(mu, sigma, (n, noise_dim))
+    noise = randn(noise_dim * n)
+    noise = noise.reshape(n, noise_dim)
     x = generator.predict(noise)  # noise need to be nd array
-    # create class labels
     y = np.zeros((n, 1))
     # y = np.ones((n, 1))
     return x, y
@@ -205,8 +206,10 @@ def train(data, g_model, d_model, gan_model, noise_dim, epochs, batch_size, earl
             # d_loss = d_real_loss - d_fake_loss
 
             # generate noise as input for the generator
-            mu, sigma = 0.5, 0.1  # mean and standard deviation
-            noise = np.random.normal(mu, sigma, (batch_size, noise_dim))
+            # mu, sigma = 0.5, 0.1  # mean and standard deviation
+            # noise = np.random.normal(mu, sigma, (batch_size, noise_dim))
+            noise = randn(noise_dim * batch_size)
+            noise = noise.reshape(batch_size, noise_dim)
             x_gan = noise
             # create inverted labels for the fake samples
             y_gan = np.ones((batch_size, 1))
@@ -288,7 +291,7 @@ def part1(action):
 
     # Define the GAN and training parameters.
     # size of the noise space
-    noise_dim = 32
+    noise_dim = 50
     output_shape = len(transformed_data[0])
     # create the discriminator
     discriminator = define_discriminator(output_shape)
@@ -323,8 +326,8 @@ def part1(action):
 
 
 def main():
-    part1(action="train")
-    # part1(action="eval")
+    # part1(action="train")
+    part1(action="eval")
     # part1(action="equal")
 
 
