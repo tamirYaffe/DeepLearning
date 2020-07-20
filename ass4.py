@@ -43,12 +43,12 @@ def data_transformation(data, meta):
                     attr_value = attr_range.index(attr_value)
                     one_hot_vector[attr_value] = 1
                 except:
-                    ctr = ctr+1
+                    ctr = ctr + 1
                 transformed_line.extend(one_hot_vector)
                 # print(one_hot_vector)
         transformed_data.append(transformed_line)
         # print(line_ctr)
-        line_ctr = line_ctr+1
+        line_ctr = line_ctr + 1
     # print(ctr)
     return transformed_data
 
@@ -182,7 +182,7 @@ def print_progress(iterations, i, d_loss, g_loss, batch_size, total_samples):
 def train(data, g_model, d_model, gan_model, noise_dim, epochs, batch_size, early_stop):
     # determine half the size of one batch, for updating the discriminator
     half_batch_size = int(batch_size / 2)
-    iterations = int(len(data)/half_batch_size)
+    iterations = int(len(data) / half_batch_size)
     if len(data) % batch_size != 0:
         iterations = iterations + 1
     history = {'d_loss': [], 'g_loss': []}
@@ -190,7 +190,7 @@ def train(data, g_model, d_model, gan_model, noise_dim, epochs, batch_size, earl
     joint_loss_improvement_ctr = 0
     # manually enumerate epochs
     for epoch in range(epochs):
-        print("Epoch (%d/%d)" % (epoch+1, epochs))
+        print("Epoch (%d/%d)" % (epoch + 1, epochs))
         d_loss = 1
         g_loss = 1
         for i in range(iterations):
@@ -202,7 +202,7 @@ def train(data, g_model, d_model, gan_model, noise_dim, epochs, batch_size, earl
             d_real_loss = d_model.train_on_batch(x_real, y_real)
             d_fake_loss = d_model.train_on_batch(x_fake, y_fake)
 
-            d_loss = (d_real_loss + d_fake_loss)/2
+            d_loss = (d_real_loss + d_fake_loss) / 2
             # d_loss = d_real_loss - d_fake_loss
 
             # generate noise as input for the generator
@@ -273,10 +273,19 @@ def find_avg_dist(x_fake):
         for j in range(len(x_fake)):
             for attr in range(len(x_fake[0])):
                 dist += abs(x_fake[i][attr] - x_fake[j][attr])
-        dist = dist/len(x_fake)
+        dist = dist / len(x_fake)
         avg_dist += dist
-    avg_dist = avg_dist/len(x_fake)
+    avg_dist = avg_dist / len(x_fake)
     return avg_dist
+
+
+def samples_variance(samples):
+    # variance = pow(samples - mean_sample, 2) / len(samples)
+    mean_sample = np.mean(samples, axis=0)
+    for i in range(len(samples)):
+        samples[i] = pow(samples[i] - mean_sample, 2) / len(samples)
+    mean_variance = np.mean(samples)
+    return mean_variance
 
 
 def part1(action):
@@ -322,13 +331,18 @@ def part1(action):
     if action is "equal":
         generator.load_weights(saved_models_path + 'generator_weights.h5')
         x_fake, y_fake = generate_fake_samples(generator, noise_dim, 100)
-        print(find_avg_dist(x_fake))
+        np.random.shuffle(transformed_data)
+        x_real, y_real = real_samples_batch(transformed_data, 100, 0)
+
+        print(samples_variance(x_fake))
+        print(samples_variance(x_real))
+        # print(find_avg_dist(x_fake))
 
 
 def main():
     # part1(action="train")
-    part1(action="eval")
-    # part1(action="equal")
+    # part1(action="eval")
+    part1(action="equal")
 
 
 if __name__ == '__main__':
