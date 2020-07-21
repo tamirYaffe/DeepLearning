@@ -4,12 +4,14 @@ import time
 from keras import Input, Model
 from scipy.io import arff
 import numpy as np
-from numpy import vstack
+from numpy import vstack, hstack
 from keras.models import Sequential
-from keras.layers import Dense, Dropout, Concatenate, LeakyReLU, BatchNormalization
+from keras.layers import Dense, Dropout, Concatenate, LeakyReLU, BatchNormalization, Lambda
 import matplotlib.pyplot as plt
 from keras import backend
 from numpy.random import randn
+import keras.backend as K
+import tensorflow as tf
 
 path_separator = os.path.sep
 saved_models_path = "ass4_data" + path_separator + "models" + path_separator
@@ -37,24 +39,38 @@ def data_transformation(data, meta):
                 transformed_line.append(attr_value)
                 # print(line[attr])
             else:
-                attr_value = str(line[attr])[2:-1]
-                one_hot_vector = np.zeros(len(attr_range))
+                attr_value_category = str(line[attr])[2:-1]
+                # one_hot_vector = np.zeros(len(attr_range))
+                attr_value = 0
                 try:
-                    attr_value = attr_range.index(attr_value)
-                    one_hot_vector[attr_value] = 1
+                    attr_value = attr_range.index(attr_value_category)
+                    # one_hot_vector[attr_value] = 1
                 except:
                     ctr = ctr + 1
-                transformed_line.extend(one_hot_vector)
+                # transformed_line.extend(one_hot_vector)
+                transformed_line.append(attr_value)
                 # print(one_hot_vector)
         transformed_data.append(transformed_line)
         # print(line_ctr)
         line_ctr = line_ctr + 1
-    # print(ctr)
+    print(ctr)
     return transformed_data
 
 
 # define the standalone generator model
-def define_generator(noise_dim, meta):
+def function(X):
+    # x_var = K.var(X, axis=0, keepdims=True)
+    # x_var = K.sum(x_var)
+    # mean, variance = tf.nn.moments(X, [0], keepdims=True)
+    mean, variance = tf.nn.moments(X, [0])
+    # variance = K.sum(variance, keepdims=True)
+    variance = K.mean(variance, keepdims=True)
+    variance = K.reshape(variance, (1, 1))
+    return K.tile(variance, (K.shape(X)[0], 1))
+
+
+
+def define_generator(noise_dim, output_shape):
     input_layer = Input(shape=(noise_dim,))
     x = Dense(32, activation="relu")(input_layer)
     # x = Dense(32)(input_layer)
@@ -71,22 +87,12 @@ def define_generator(noise_dim, meta):
     # x = BatchNormalization()(x)
     # x = LeakyReLU(alpha=0.1)(x)
 
-    attr_layers = []
-    for attr in meta:
-        attr_type = meta[attr][0]
-        if attr_type is 'numeric':
-            attr_layer = Dense(1, activation="relu")(x)
-            # attr_layer = Dense(1)(x)
-            # attr_layer = LeakyReLU(alpha=0.1)(attr_layer)
-        else:
-            attr_range = len(meta[attr][1])
-            attr_layer = Dense(attr_range, activation='softmax')(x)
-        attr_layers.append(attr_layer)
+    x = Dense(output_shape, activation='sigmoid')(x)
+    # x = Dense(output_shape-1, activation='sigmoid')(x)
+    # x_var = Lambda(lambda x: function(x))(x)
+    # x = Concatenate()([x, x_var])
 
-    # Concatenating together the attribute layers:
-    attr_layers = Concatenate()(attr_layers)
-
-    return Model(inputs=input_layer, outputs=attr_layers)
+    return Model(inputs=input_layer, outputs=x)
 
 
 def define_discriminator(input_shape):
@@ -146,6 +152,9 @@ def data_batch(data, batch_size, batch_num):
 # generate batch_size of real samples with class labels
 def real_samples_batch(data, batch_size, batch_num):
     x = data_batch(data, batch_size, batch_num)
+    # mean_variance = samples_variance(x)
+    # mean_variance_array = np.full((len(x), 1), mean_variance)
+    # x = hstack((x, mean_variance_array))
     # generate class labels
     y = np.ones((len(x), 1))
     # y = -np.ones((len(x), 1))
@@ -179,7 +188,7 @@ def print_progress(iterations, i, d_loss, g_loss, batch_size, total_samples):
     sys.stdout.write("\r%d/%d [%s] - d_loss: %f - g_loss: %f" % (samples_covered, total_samples, bar, d_loss, g_loss))
 
 
-def train(data, g_model, d_model, gan_model, noise_dim, epochs, batch_size, early_stop):
+def train(data, meta, g_model, d_model, gan_model, noise_dim, epochs, batch_size, early_stop):
     # determine half the size of one batch, for updating the discriminator
     half_batch_size = int(batch_size / 2)
     iterations = int(len(data) / half_batch_size)
@@ -189,10 +198,25 @@ def train(data, g_model, d_model, gan_model, noise_dim, epochs, batch_size, earl
     min_joint_loss = float('inf')
     joint_loss_improvement_ctr = 0
     # manually enumerate epochs
+
+    # worm up
+    # generator = define_generator(noise_dim, meta)
+    # gan = define_gan(generator, d_model)
+    # for i in range(0):
+    #     x_real, y_real = real_samples_batch(data, half_batch_size, i)
+    #     x_fake, y_fake = generate_fake_samples(generator, noise_dim, len(x_real))
+    #     d_model.train_on_batch(x_real, y_real)
+    #     d_model.train_on_batch(x_fake, y_fake)
+    #     noise = randn(noise_dim * batch_size)
+    #     noise = noise.reshape(batch_size, noise_dim)
+    #     x_gan = noise
+    #     y_gan = np.ones((batch_size, 1))
+    #     gan.train_on_batch(x_gan, y_gan)
     for epoch in range(epochs):
         print("Epoch (%d/%d)" % (epoch + 1, epochs))
         d_loss = 1
         g_loss = 1
+        np.random.shuffle(data)
         for i in range(iterations):
             # prepare real samples
             x_real, y_real = real_samples_batch(data, half_batch_size, i)
@@ -252,14 +276,14 @@ def plot_history(history, y_scale):
     plt.show()
 
 
-def find_min_dist(x_fake, data):
+def find_min_dist(fake_sample, samples):
     min_dist = float('inf')
     min_dist_line = 0
-    for i in range(len(data)):
-        line = data[i]
+    for i in range(len(samples)):
+        line = samples[i]
         dist = 0
         for j in range(len(line)):
-            dist += abs(line[j] - x_fake[0][j])
+            dist += abs(line[j] - fake_sample[j])
         if dist < min_dist:
             min_dist = dist
             min_dist_line = i
@@ -297,26 +321,33 @@ def part1(action):
 
     # apply the required data transformations.
     transformed_data = data_transformation(data, meta)
+    # x_normed = (x - x.min(0)) / x.ptp(0)
+    numpy_data = np.array(transformed_data)
+    min_data = numpy_data.min(0)
+    max_data = numpy_data.max(0)
+    normed_data = (numpy_data - min_data) / (max_data - min_data)
+    # normed_data = (numpy_data - numpy_data.min(0)) / numpy_data.ptp(0)
 
     # Define the GAN and training parameters.
     # size of the noise space
     noise_dim = 50
-    output_shape = len(transformed_data[0])
+    output_shape = len(normed_data[0])
+    # output_shape = len(normed_data[0]) + 1
     # create the discriminator
     discriminator = define_discriminator(output_shape)
-    # discriminator.summary()
+    discriminator.summary()
 
     # create the generator
-    generator = define_generator(noise_dim, meta)
-    # generator.summary()
+    generator = define_generator(noise_dim, output_shape)
+    generator.summary()
 
     # create the gan
     gan_model = define_gan(generator, discriminator)
 
     if action is "train":
         # Training the GAN model.
-        history = train(transformed_data, generator, discriminator, gan_model, noise_dim,
-                        epochs=20, batch_size=128, early_stop=5)
+        history = train(normed_data, meta, generator, discriminator, gan_model, noise_dim,
+                        epochs=30, batch_size=128, early_stop=5)
         plot_history(history, y_scale="linear")
         plot_history(history, y_scale="log")
 
@@ -325,14 +356,19 @@ def part1(action):
         generator.load_weights(saved_models_path + 'generator_weights.h5')
         x_fake, y_fake = generate_fake_samples(generator, noise_dim, 100)
         prediction = discriminator.predict(x_fake)
+        success_num = np.count_nonzero(prediction > 0.5)
+        fake_samples = x_fake * (max_data - min_data) + min_data
+        # todo: filter samples that are below 0.5 prediction.
+        max_value_index = np.argmax(prediction)
+        min_dist_line, min_dist = find_min_dist(fake_samples[max_value_index], numpy_data)
         print(x_fake)
         print(prediction)
 
     if action is "equal":
         generator.load_weights(saved_models_path + 'generator_weights.h5')
         x_fake, y_fake = generate_fake_samples(generator, noise_dim, 100)
-        np.random.shuffle(transformed_data)
-        x_real, y_real = real_samples_batch(transformed_data, 100, 0)
+        np.random.shuffle(normed_data)
+        x_real, y_real = real_samples_batch(normed_data, 100, 0)
 
         print(samples_variance(x_fake))
         print(samples_variance(x_real))
@@ -341,8 +377,8 @@ def part1(action):
 
 def main():
     # part1(action="train")
-    # part1(action="eval")
-    part1(action="equal")
+    part1(action="eval")
+    # part1(action="equal")
 
 
 if __name__ == '__main__':
