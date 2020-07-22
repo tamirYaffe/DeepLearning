@@ -12,6 +12,7 @@ from keras import backend
 from numpy.random import randn
 import keras.backend as K
 import tensorflow as tf
+import csv
 
 path_separator = os.path.sep
 saved_models_path = "ass4_data" + path_separator + "models" + path_separator
@@ -55,6 +56,25 @@ def data_transformation(data, meta):
         line_ctr = line_ctr + 1
     print(ctr)
     return transformed_data
+
+
+def data_back_transformation(transformed_data, meta):
+    data = []
+    for line in transformed_data:
+        data_line = []
+        index = 0
+        for attr in meta:
+            attr_type = meta[attr][0]
+            attr_range = meta[attr][1]
+            attr_value = int(round(line[index]))
+            if attr_type is 'numeric':
+                data_line.append(attr_value)
+            else:
+                attr_value_category = attr_range[attr_value]
+                data_line.append(attr_value_category)
+            index += 1
+        data.append(data_line)
+    return data
 
 
 # define the standalone generator model
@@ -365,11 +385,23 @@ def part1(action):
                 filter_samples.append(fake_samples[i])
         filter_samples = np.array(filter_samples)
         success_predictions = prediction[filter_predictions]
-        max_value_index = np.argmax(prediction)
-        min_dist_line, min_dist = find_min_dist(fake_samples[max_value_index], numpy_data)
-        # todo: write filter_samples to csv file with their prediction and similar real sample
-        print(x_fake)
-        print(prediction)
+        # max_value_index = np.argmax(prediction)
+        samples_data = data_back_transformation(filter_samples, meta)
+        for i in range(len(filter_samples)):
+            min_dist_line, min_dist = find_min_dist(filter_samples[i], numpy_data)
+            samples_data[i].append(success_predictions[i])
+            samples_data[i].append(min_dist)
+            samples_data[i].append(min_dist_line)
+        headline = []
+        for attr in meta:
+            headline.append(attr)
+        headline.append("prediction")
+        headline.append("min dist")
+        headline.append("min dist line")
+        samples_data.insert(0, headline)
+        with open("success_samples.csv", "w+") as my_csv:
+            csvWriter = csv.writer(my_csv, delimiter=',')
+            csvWriter.writerows(samples_data)
 
     if action is "equal":
         generator.load_weights(saved_models_path + 'generator_weights.h5')
