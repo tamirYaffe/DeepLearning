@@ -358,9 +358,16 @@ def part1(action):
         prediction = discriminator.predict(x_fake)
         success_num = np.count_nonzero(prediction > 0.5)
         fake_samples = x_fake * (max_data - min_data) + min_data
-        # todo: filter samples that are below 0.5 prediction.
+        filter_predictions = prediction > 0.5
+        filter_samples = []
+        for i in range(len(prediction)):
+            if filter_predictions[i]:
+                filter_samples.append(fake_samples[i])
+        filter_samples = np.array(filter_samples)
+        success_predictions = prediction[filter_predictions]
         max_value_index = np.argmax(prediction)
         min_dist_line, min_dist = find_min_dist(fake_samples[max_value_index], numpy_data)
+        # todo: write filter_samples to csv file with their prediction and similar real sample
         print(x_fake)
         print(prediction)
 
