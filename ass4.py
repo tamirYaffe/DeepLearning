@@ -89,23 +89,22 @@ def function(X):
     return K.tile(variance, (K.shape(X)[0], 1))
 
 
-
 def define_generator(noise_dim, output_shape):
     input_layer = Input(shape=(noise_dim,))
-    x = Dense(32, activation="relu")(input_layer)
-    # x = Dense(32)(input_layer)
-    # x = BatchNormalization()(x)
-    # x = LeakyReLU(alpha=0.1)(x)
+    # x = Dense(32, activation="relu")(input_layer)
+    x = Dense(32)(input_layer)
+    x = BatchNormalization()(x)
+    x = LeakyReLU(alpha=0.1)(x)
     # x = Dropout(0.4)(x)
-    x = Dense(64, activation="relu")(x)
-    # x = Dense(64)(x)
-    # x = BatchNormalization()(x)
-    # x = LeakyReLU(alpha=0.1)(x)
+    # x = Dense(64, activation="relu")(x)
+    x = Dense(64)(x)
+    x = BatchNormalization()(x)
+    x = LeakyReLU(alpha=0.1)(x)
     # x = Dropout(0.5)(x)
-    x = Dense(128, activation="relu")(x)
-    # x = Dense(128)(x)
-    # x = BatchNormalization()(x)
-    # x = LeakyReLU(alpha=0.1)(x)
+    # x = Dense(128, activation="relu")(x)
+    x = Dense(128)(x)
+    x = BatchNormalization()(x)
+    x = LeakyReLU(alpha=0.1)(x)
 
     x = Dense(output_shape, activation='sigmoid')(x)
     # x = Dense(output_shape-1, activation='sigmoid')(x)
@@ -117,20 +116,20 @@ def define_generator(noise_dim, output_shape):
 
 def define_discriminator(input_shape):
     model = Sequential()
-    model.add(Dense(128, activation="relu", kernel_initializer='he_uniform', input_dim=input_shape))
-    # model.add(Dense(128, kernel_initializer='he_uniform', input_dim=input_shape))
-    # model.add(BatchNormalization())
-    # model.add(LeakyReLU(alpha=0.1))
+    # model.add(Dense(128, activation="relu", kernel_initializer='he_uniform', input_dim=input_shape))
+    model.add(Dense(128, kernel_initializer='he_uniform', input_dim=input_shape))
+    model.add(BatchNormalization())
+    model.add(LeakyReLU(alpha=0.1))
     model.add(Dropout(0.1))
-    model.add(Dense(64, activation="relu"))
-    # model.add(Dense(64))
-    # model.add(BatchNormalization())
-    # model.add(LeakyReLU(alpha=0.1))
+    # model.add(Dense(64, activation="relu"))
+    model.add(Dense(64))
+    model.add(BatchNormalization())
+    model.add(LeakyReLU(alpha=0.1))
     model.add(Dropout(0.1))
-    model.add(Dense(32, activation="relu"))
-    # model.add(Dense(32))
-    # model.add(BatchNormalization())
-    # model.add(LeakyReLU(alpha=0.1))
+    # model.add(Dense(32, activation="relu"))
+    model.add(Dense(32))
+    model.add(BatchNormalization())
+    model.add(LeakyReLU(alpha=0.1))
     model.add(Dense(1, activation='sigmoid'))
     # model.add(Dense(1))
 
@@ -265,13 +264,16 @@ def train(data, meta, g_model, d_model, gan_model, noise_dim, epochs, batch_size
             print_progress(iterations, i, d_loss, g_loss, half_batch_size, len(data))
 
         # saving best model and early stop
-        joint_loss = g_loss + d_loss
+        # joint_loss = g_loss + d_loss
+        joint_loss = abs(g_loss - d_loss)
         # joint_loss = d_loss
         if min_joint_loss > joint_loss:
             joint_loss_improvement_ctr = 0
             min_joint_loss = joint_loss
-            d_model.save_weights(saved_models_path + 'discriminator_weights.h5')
-            g_model.save_weights(saved_models_path + 'generator_weights.h5')
+            # d_model.save_weights(saved_models_path + 'discriminator_weights.h5')
+            # g_model.save_weights(saved_models_path + 'generator_weights.h5')
+            d_model.save(saved_models_path + 'discriminator')
+            g_model.save(saved_models_path + 'generator')
         else:
             joint_loss_improvement_ctr += 1
             if joint_loss_improvement_ctr == early_stop:
@@ -281,6 +283,8 @@ def train(data, meta, g_model, d_model, gan_model, noise_dim, epochs, batch_size
         # history['d_loss'].append(d_loss)
         # history['g_loss'].append(g_loss)
         print()
+    d_model.save(saved_models_path + 'discriminator')
+    g_model.save(saved_models_path + 'generator')
     return history
 
 
@@ -367,13 +371,17 @@ def part1(action):
     if action is "train":
         # Training the GAN model.
         history = train(normed_data, meta, generator, discriminator, gan_model, noise_dim,
-                        epochs=30, batch_size=128, early_stop=5)
+                        epochs=30, batch_size=128, early_stop=100)
         plot_history(history, y_scale="linear")
         plot_history(history, y_scale="log")
 
     if action is "eval":
-        discriminator.load_weights(saved_models_path + 'discriminator_weights.h5')
-        generator.load_weights(saved_models_path + 'generator_weights.h5')
+        # load models
+        # discriminator.load_weights(saved_models_path + 'discriminator_weights.h5')
+        # generator.load_weights(saved_models_path + 'generator_weights.h5')
+        discriminator = tf.keras.models.load_model(saved_models_path + 'discriminator')
+        generator = tf.keras.models.load_model(saved_models_path + 'generator')
+
         x_fake, y_fake = generate_fake_samples(generator, noise_dim, 100)
         prediction = discriminator.predict(x_fake)
         success_num = np.count_nonzero(prediction > 0.5)
@@ -403,21 +411,10 @@ def part1(action):
             csvWriter = csv.writer(my_csv, delimiter=',')
             csvWriter.writerows(samples_data)
 
-    if action is "equal":
-        generator.load_weights(saved_models_path + 'generator_weights.h5')
-        x_fake, y_fake = generate_fake_samples(generator, noise_dim, 100)
-        np.random.shuffle(normed_data)
-        x_real, y_real = real_samples_batch(normed_data, 100, 0)
-
-        print(samples_variance(x_fake))
-        print(samples_variance(x_real))
-        # print(find_avg_dist(x_fake))
-
 
 def main():
-    # part1(action="train")
-    part1(action="eval")
-    # part1(action="equal")
+    part1(action="train")
+    # part1(action="eval")
 
 
 if __name__ == '__main__':
