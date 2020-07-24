@@ -2,6 +2,7 @@ import os
 import sys
 import time
 from keras import Input, Model
+from keras.optimizers import Adam
 from scipy.io import arff
 import numpy as np
 from numpy import vstack, hstack
@@ -54,7 +55,7 @@ def data_transformation(data, meta):
         transformed_data.append(transformed_line)
         # print(line_ctr)
         line_ctr = line_ctr + 1
-    print(ctr)
+    # print(ctr)
     return transformed_data
 
 
@@ -134,8 +135,42 @@ def define_discriminator(input_shape):
     # model.add(Dense(1))
 
     # compile model
+    optimizer = Adam(lr=0.0002, beta_1=0.5)
     model.compile(loss='binary_crossentropy', optimizer='adam')
+    # model.compile(loss='binary_crossentropy', optimizer='sgd')
     # model.compile(loss=wasserstein_loss, optimizer='sgd')
+    return model
+
+
+def define_discriminator2(input_shape):
+    input_layer = Input(shape=(input_shape,))
+
+    input_layer_var = Lambda(lambda x: function(x))(input_layer)
+    x = Concatenate()([input_layer, input_layer_var])
+
+    # x = Dense(32, activation="relu")(input_layer)
+    x = Dense(128)(x)
+    x = BatchNormalization()(x)
+    x = LeakyReLU(alpha=0.1)(x)
+    x = Dropout(0.1)(x)
+    # x = Dense(64, activation="relu")(x)
+    x = Dense(64)(x)
+    x = BatchNormalization()(x)
+    x = LeakyReLU(alpha=0.1)(x)
+    x = Dropout(0.1)(x)
+    # x = Dense(128, activation="relu")(x)
+    x = Dense(32)(x)
+    x = BatchNormalization()(x)
+    x = LeakyReLU(alpha=0.1)(x)
+
+    x = Dense(1, activation='sigmoid')(x)
+    # x = Dense(output_shape-1, activation='sigmoid')(x)
+    # x_var = Lambda(lambda x: function(x))(x)
+    # x = Concatenate()([x, x_var])
+
+    model = Model(inputs=input_layer, outputs=x)
+    optimizer = Adam(lr=0.0002, beta_1=0.5)
+    model.compile(loss='binary_crossentropy', optimizer='adam')
     return model
 
 
@@ -174,8 +209,11 @@ def real_samples_batch(data, batch_size, batch_num):
     # mean_variance = samples_variance(x)
     # mean_variance_array = np.full((len(x), 1), mean_variance)
     # x = hstack((x, mean_variance_array))
+
     # generate class labels
     y = np.ones((len(x), 1))
+    # y = np.random.uniform(0.9, 1, (len(x), 1))
+    # y = np.full((len(x), 1), 0.9)
     # y = -np.ones((len(x), 1))
     return x, y
 
@@ -188,6 +226,7 @@ def generate_fake_samples(generator, noise_dim, n):
     noise = noise.reshape(n, noise_dim)
     x = generator.predict(noise)  # noise need to be nd array
     y = np.zeros((n, 1))
+    # y = np.random.uniform(0, 0.1, (len(x), 1))
     # y = np.ones((n, 1))
     return x, y
 
@@ -265,26 +304,28 @@ def train(data, meta, g_model, d_model, gan_model, noise_dim, epochs, batch_size
 
         # saving best model and early stop
         # joint_loss = g_loss + d_loss
-        joint_loss = abs(g_loss - d_loss)
+        # joint_loss = abs(g_loss - d_loss)
         # joint_loss = d_loss
-        if min_joint_loss > joint_loss:
-            joint_loss_improvement_ctr = 0
-            min_joint_loss = joint_loss
+        # if min_joint_loss > joint_loss:
+        #     joint_loss_improvement_ctr = 0
+        #     min_joint_loss = joint_loss
             # d_model.save_weights(saved_models_path + 'discriminator_weights.h5')
             # g_model.save_weights(saved_models_path + 'generator_weights.h5')
-            d_model.save(saved_models_path + 'discriminator')
-            g_model.save(saved_models_path + 'generator')
-        else:
-            joint_loss_improvement_ctr += 1
-            if joint_loss_improvement_ctr == early_stop:
-                print()
-                return history
+            # d_model.save(saved_models_path + 'discriminator')
+            # g_model.save(saved_models_path + 'generator')
+        # else:
+        #     joint_loss_improvement_ctr += 1
+        #     if joint_loss_improvement_ctr == early_stop:
+        #         print()
+        #         return history
 
         # history['d_loss'].append(d_loss)
         # history['g_loss'].append(g_loss)
         print()
-    d_model.save(saved_models_path + 'discriminator')
-    g_model.save(saved_models_path + 'generator')
+    # d_model.save(saved_models_path + 'discriminator')
+    # g_model.save(saved_models_path + 'generator')
+    d_model.save_weights(saved_models_path + 'discriminator_weights.h5')
+    g_model.save_weights(saved_models_path + 'generator_weights.h5')
     return history
 
 
@@ -358,12 +399,13 @@ def part1(action):
     output_shape = len(normed_data[0])
     # output_shape = len(normed_data[0]) + 1
     # create the discriminator
-    discriminator = define_discriminator(output_shape)
-    discriminator.summary()
+    # discriminator = define_discriminator(output_shape)
+    discriminator = define_discriminator2(output_shape)
+    # discriminator.summary()
 
     # create the generator
     generator = define_generator(noise_dim, output_shape)
-    generator.summary()
+    # generator.summary()
 
     # create the gan
     gan_model = define_gan(generator, discriminator)
@@ -371,16 +413,16 @@ def part1(action):
     if action is "train":
         # Training the GAN model.
         history = train(normed_data, meta, generator, discriminator, gan_model, noise_dim,
-                        epochs=30, batch_size=128, early_stop=100)
+                        epochs=20, batch_size=128, early_stop=100)
         plot_history(history, y_scale="linear")
-        plot_history(history, y_scale="log")
+        # plot_history(history, y_scale="log")
 
     if action is "eval":
         # load models
-        # discriminator.load_weights(saved_models_path + 'discriminator_weights.h5')
-        # generator.load_weights(saved_models_path + 'generator_weights.h5')
-        discriminator = tf.keras.models.load_model(saved_models_path + 'discriminator')
-        generator = tf.keras.models.load_model(saved_models_path + 'generator')
+        discriminator.load_weights(saved_models_path + 'discriminator_weights.h5')
+        generator.load_weights(saved_models_path + 'generator_weights.h5')
+        # discriminator = tf.keras.models.load_model(saved_models_path + 'discriminator')
+        # generator = tf.keras.models.load_model(saved_models_path + 'generator')
 
         x_fake, y_fake = generate_fake_samples(generator, noise_dim, 100)
         prediction = discriminator.predict(x_fake)
