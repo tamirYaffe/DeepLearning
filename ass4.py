@@ -14,6 +14,8 @@ from numpy.random import randn
 import keras.backend as K
 import tensorflow as tf
 import csv
+from decimal import Decimal
+
 
 path_separator = os.path.sep
 saved_models_path = "ass4_data" + path_separator + "models" + path_separator
@@ -399,8 +401,8 @@ def part1(action):
     output_shape = len(normed_data[0])
     # output_shape = len(normed_data[0]) + 1
     # create the discriminator
-    # discriminator = define_discriminator(output_shape)
-    discriminator = define_discriminator2(output_shape)
+    discriminator = define_discriminator(output_shape)
+    # discriminator = define_discriminator2(output_shape)
     # discriminator.summary()
 
     # create the generator
@@ -430,15 +432,20 @@ def part1(action):
         fake_samples = x_fake * (max_data - min_data) + min_data
         filter_predictions = prediction > 0.5
         filter_samples = []
+        filter_x = []
         for i in range(len(prediction)):
             if filter_predictions[i]:
                 filter_samples.append(fake_samples[i])
+                filter_x.append(x_fake[i])
         filter_samples = np.array(filter_samples)
         success_predictions = prediction[filter_predictions]
         # max_value_index = np.argmax(prediction)
         samples_data = data_back_transformation(filter_samples, meta)
         for i in range(len(filter_samples)):
-            min_dist_line, min_dist = find_min_dist(filter_samples[i], numpy_data)
+            # min_dist_line, min_dist = find_min_dist(filter_samples[i], numpy_data)
+            min_dist_line, min_dist = find_min_dist(filter_x[i], normed_data)
+            min_dist = Decimal(min_dist)
+            min_dist = round(min_dist, 3)
             samples_data[i].append(success_predictions[i])
             samples_data[i].append(min_dist)
             samples_data[i].append(min_dist_line)
@@ -446,7 +453,7 @@ def part1(action):
         for attr in meta:
             headline.append(attr)
         headline.append("prediction")
-        headline.append("min dist")
+        headline.append("min normal dist")
         headline.append("min dist line")
         samples_data.insert(0, headline)
         with open("success_samples.csv", "w+") as my_csv:
