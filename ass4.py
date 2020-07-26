@@ -16,6 +16,9 @@ import keras.backend as K
 import tensorflow as tf
 import csv
 from decimal import Decimal
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn import metrics
 
 
 path_separator = os.path.sep
@@ -522,9 +525,123 @@ def part1(action):
             csvWriter.writerows(samples_data)
 
 
+def plot_confidence(y_hat, y_test):
+    idx_spam = np.where(y_test == 1)[0]
+    idx_ham = np.where(y_test == 0)[0]
+    plt.hist(y_hat[idx_spam, 1], histtype='step', label='class 1')
+    plt.hist(y_hat[idx_ham, 1], histtype='step', label='class 0')
+    plt.xlabel('Prediction')
+    plt.ylabel('Number of observations')
+    plt.legend(loc='upper left')
+    plt.show()
+
+
+def define_generator_for_random_forest(noise_dim, output_shape, desired_confidence_dim):
+    # Define the tensors for the two input images
+    noise_input = Input(shape=(noise_dim,))
+    desired_confidence_input = Input(shape=(desired_confidence_dim,))
+
+    x = Concatenate()([noise_input, desired_confidence_input])
+    x = Dense(32)(noise_input)
+    x = BatchNormalization()(x)
+    x = LeakyReLU(alpha=0.1)(x)
+    # x = Dropout(0.4)(x)
+
+    x = Concatenate()([x, desired_confidence_input])
+    x = Dense(64)(x)
+    x = BatchNormalization()(x)
+    x = LeakyReLU(alpha=0.1)(x)
+    # x = Dropout(0.5)(x)
+
+    x = Concatenate()([x, desired_confidence_input])
+    x = Dense(128)(x)
+    x = BatchNormalization()(x)
+    x = LeakyReLU(alpha=0.1)(x)
+
+    x = Dense(output_shape, activation='sigmoid')(x)
+
+    model = Model(inputs=[noise_input, desired_confidence_input], outputs=x)
+    return model
+
+
+def train_generator(generator, data, noise_dim, desired_confidence_dim, epochs, batch_size):
+    iterations = int(len(data) / batch_size)
+    if len(data) % batch_size != 0:
+        iterations = iterations + 1
+    # manually enumerate epochs
+    for epoch in range(epochs):
+        print("Epoch (%d/%d)" % (epoch + 1, epochs))
+        np.random.shuffle(data)
+        for i in range(iterations):
+            # generate noise as input for the generator
+            noise = randn(noise_dim)
+            desired_confidence = np.random.uniform(0, 1, desired_confidence_dim)
+            generator_input = [noise, desired_confidence]
+            # todo:create prediction from the fandom forest
+            y_gan = np.ones((batch_size, 1))
+            # update the generator via the discriminator's error
+            g_loss = generator.train_on_batch(generator_input, y_gan)
+            # if (i+1) % 100 == 0:
+            print_progress(iterations, i, 0, g_loss, batch_size, len(data))
+        print()
+    generator.save_weights(saved_models_path + 'generator_weights.h5')
+
+
+def part2(action):
+    # Read the data.
+    database = 'adult.arff'
+    # database = 'bank-full.arff'
+    data_path = 'ass4_data' + path_separator + database
+    data, meta = arff.loadarff(data_path)
+
+    # apply the required data transformations.
+    transformed_data = data_transformation(data, meta)
+    # x_normed = (x - x.min(0)) / x.ptp(0)
+    numpy_data = np.array(transformed_data)
+    min_data = numpy_data.min(0)
+    max_data = numpy_data.max(0)
+    normed_data = (numpy_data - min_data) / (max_data - min_data)
+
+    # split data to x and y
+    x = normed_data[:, :-1]
+    y = normed_data[:, -1]
+
+    # Split dataset into training set and test set
+    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.1)  # 90% training and 10% test
+
+    # create random forest
+    random_forest = RandomForestClassifier(n_estimators=100)
+
+    # train random forest
+    random_forest.fit(x_train, y_train)
+    y_pred = random_forest.predict(x_test)
+    y_hat = random_forest.predict_proba(x_test)
+    plot_confidence(y_hat, y_test)
+    y_confidence = np.empty(len(y_pred))
+    for i in range(len(y_pred)):
+        prediction = int(y_pred[i])
+        confidence = y_hat[i][prediction]
+        y_confidence[i] = confidence
+    min_confidence = y_confidence.min(0)
+    max_confidence = y_confidence.max(0)
+    mean_confidence = y_confidence.mean(0)
+    print("Accuracy:", metrics.accuracy_score(y_test, y_pred))
+    print("min_confidence: %f, max_confidence: %f, mean_confidence: %f" % (min_confidence, max_confidence,
+                                                                           mean_confidence))
+    noise_dim = 100
+    output_shape = len(normed_data[0])
+    desired_confidence_dim = 1
+    generator = define_generator_for_random_forest(noise_dim, output_shape, desired_confidence_dim)
+
+    if action is "train":
+        train_generator(generator)
+
+
 def main():
     # part1(action="train")
-    part1(action="eval")
+    # part1(action="eval")
+
+    part2(action="train")
 
 
 if __name__ == '__main__':
