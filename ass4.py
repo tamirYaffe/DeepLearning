@@ -5,9 +5,10 @@ from keras import Input, Model
 from keras.optimizers import Adam
 from scipy.io import arff
 import numpy as np
-from numpy import vstack, hstack
+from numpy import vstack
 from keras.models import Sequential
-from keras.layers import Dense, Dropout, Concatenate, LeakyReLU, BatchNormalization, Lambda
+from keras.layers import Dense, Dropout, Concatenate, LeakyReLU, BatchNormalization, Lambda, Conv2D, Flatten, \
+    Conv2DTranspose, Reshape
 import matplotlib.pyplot as plt
 from keras import backend
 from numpy.random import randn
@@ -117,6 +118,56 @@ def define_generator(noise_dim, output_shape):
     return Model(inputs=input_layer, outputs=x)
 
 
+def define_deep_generator(noise_dim, output_shape):
+    model = Sequential()
+
+    model.add(Conv2DTranspose(filters=32, kernel_size=(2, 2), input_shape=noise_dim))
+    model.add(BatchNormalization())
+    model.add(LeakyReLU(alpha=0.2))
+
+    model.add(Conv2DTranspose(filters=16, kernel_size=(4, 4)))
+    model.add(BatchNormalization())
+    model.add(LeakyReLU(alpha=0.2))
+
+    model.add(Conv2DTranspose(filters=8, kernel_size=(8, 8)))
+    model.add(BatchNormalization())
+    model.add(LeakyReLU(alpha=0.2))
+
+    model.add(Flatten())
+    model.add(Dense(output_shape, activation='sigmoid'))
+    return model
+
+
+def define_deep_discriminator(input_shape):
+    model = Sequential()
+
+    model.add(Dense(3528, input_shape=(input_shape,)))
+    # model.add(BatchNormalization())
+    model.add(LeakyReLU(alpha=0.2))
+    model.add(Reshape((21, 21, 8)))
+
+    model.add(Conv2D(filters=8, kernel_size=(8, 8)))
+    # model.add(BatchNormalization())
+    model.add(LeakyReLU(alpha=0.2))
+    model.add(Dropout(0.3))
+
+    model.add(Conv2D(filters=16, kernel_size=(4, 4)))
+    # model.add(BatchNormalization())
+    model.add(LeakyReLU(alpha=0.2))
+    model.add(Dropout(0.3))
+
+    model.add(Conv2D(filters=32, kernel_size=(2, 2)))
+    # model.add(BatchNormalization())
+    model.add(LeakyReLU(alpha=0.2))
+    model.add(Dropout(0.3))
+
+    model.add(Flatten())
+    model.add(Dense(1, activation='sigmoid'))
+    optimizer = Adam(lr=0.0002, beta_1=0.5)
+    model.compile(loss='binary_crossentropy', optimizer=optimizer)
+    return model
+
+
 def define_discriminator(input_shape):
     model = Sequential()
     # model.add(Dense(128, activation="relu", kernel_initializer='he_uniform', input_dim=input_shape))
@@ -187,7 +238,8 @@ def define_gan(generator, discriminator):
     # add the discriminator
     model.add(discriminator)
     # compile model
-    model.compile(loss='binary_crossentropy', optimizer='adam')
+    optimizer = Adam(lr=0.0002, beta_1=0.5)
+    model.compile(loss='binary_crossentropy', optimizer=optimizer)
     # model.compile(loss=wasserstein_loss, optimizer='adam')
     return model
 
@@ -213,8 +265,8 @@ def real_samples_batch(data, batch_size, batch_num):
     # x = hstack((x, mean_variance_array))
 
     # generate class labels
-    y = np.ones((len(x), 1))
-    # y = np.random.uniform(0.9, 1, (len(x), 1))
+    # y = np.ones((len(x), 1))
+    y = np.random.uniform(0.7, 1.2, (len(x), 1))
     # y = np.full((len(x), 1), 0.9)
     # y = -np.ones((len(x), 1))
     return x, y
@@ -224,11 +276,15 @@ def real_samples_batch(data, batch_size, batch_num):
 def generate_fake_samples(generator, noise_dim, n):
     # mu, sigma = 0.5, 0.1  # mean and standard deviation
     # noise = np.random.normal(mu, sigma, (n, noise_dim))
-    noise = randn(noise_dim * n)
-    noise = noise.reshape(n, noise_dim)
+    # noise = randn(noise_dim * n)
+    # noise = noise.reshape(n, noise_dim)
+
+    noise = randn(noise_dim[0] * noise_dim[1] * n)
+    noise = noise.reshape((n, noise_dim[0], noise_dim[1], noise_dim[2]))
+
     x = generator.predict(noise)  # noise need to be nd array
-    y = np.zeros((n, 1))
-    # y = np.random.uniform(0, 0.1, (len(x), 1))
+    # y = np.zeros((n, 1))
+    y = np.random.uniform(0, 0.3, (len(x), 1))
     # y = np.ones((n, 1))
     return x, y
 
@@ -292,8 +348,10 @@ def train(data, meta, g_model, d_model, gan_model, noise_dim, epochs, batch_size
             # generate noise as input for the generator
             # mu, sigma = 0.5, 0.1  # mean and standard deviation
             # noise = np.random.normal(mu, sigma, (batch_size, noise_dim))
-            noise = randn(noise_dim * batch_size)
-            noise = noise.reshape(batch_size, noise_dim)
+            # noise = randn(noise_dim * batch_size)
+            # noise = noise.reshape(batch_size, noise_dim)
+            noise = randn(noise_dim[0] * noise_dim[1] * batch_size)
+            noise = noise.reshape((batch_size, noise_dim[0], noise_dim[1], noise_dim[2]))
             x_gan = noise
             # create inverted labels for the fake samples
             y_gan = np.ones((batch_size, 1))
@@ -401,12 +459,15 @@ def part1(action):
     output_shape = len(normed_data[0])
     # output_shape = len(normed_data[0]) + 1
     # create the discriminator
-    discriminator = define_discriminator(output_shape)
+    # discriminator = define_discriminator(output_shape)
+    discriminator = define_deep_discriminator(output_shape)
     # discriminator = define_discriminator2(output_shape)
     # discriminator.summary()
 
     # create the generator
     generator = define_generator(noise_dim, output_shape)
+    noise_dim = (10, 10, 1)
+    generator = define_deep_generator(noise_dim, output_shape)
     # generator.summary()
 
     # create the gan
@@ -462,8 +523,8 @@ def part1(action):
 
 
 def main():
-    part1(action="train")
-    # part1(action="eval")
+    # part1(action="train")
+    part1(action="eval")
 
 
 if __name__ == '__main__':
