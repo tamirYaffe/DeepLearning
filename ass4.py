@@ -536,6 +536,12 @@ def plot_confidence(y_hat, y_test):
     plt.show()
 
 
+def confidence_loss(y_true, y_pred):
+    bce = tf.keras.losses.BinaryCrossentropy()
+    return bce(y_true, y_pred[:, -1])
+    # return backend.sum(backend.abs(y_true - y_pred[:, -1]))
+
+
 def define_generator_for_random_forest(noise_dim, output_shape, desired_confidence_dim):
     # Define the tensors for the two input images
     noise_input = Input(shape=(noise_dim,))
@@ -545,26 +551,29 @@ def define_generator_for_random_forest(noise_dim, output_shape, desired_confiden
     x = Dense(32)(noise_input)
     x = BatchNormalization()(x)
     x = LeakyReLU(alpha=0.1)(x)
-    # x = Dropout(0.4)(x)
+    x = Dropout(0.4)(x)
 
-    x = Concatenate()([x, desired_confidence_input])
+    # x = Concatenate()([x, desired_confidence_input])
     x = Dense(64)(x)
     x = BatchNormalization()(x)
     x = LeakyReLU(alpha=0.1)(x)
-    # x = Dropout(0.5)(x)
+    x = Dropout(0.5)(x)
 
-    x = Concatenate()([x, desired_confidence_input])
+    # x = Concatenate()([x, desired_confidence_input])
     x = Dense(128)(x)
     x = BatchNormalization()(x)
     x = LeakyReLU(alpha=0.1)(x)
 
     x = Dense(output_shape, activation='sigmoid')(x)
+    x = Concatenate()([x, desired_confidence_input])
 
     model = Model(inputs=[noise_input, desired_confidence_input], outputs=x)
+    model.compile(loss=confidence_loss, optimizer='adam')
     return model
 
 
-def train_generator(generator, data, noise_dim, desired_confidence_dim, epochs, batch_size):
+def train_generator(generator, random_forest, data, noise_dim, desired_confidence_dim, epochs, batch_size):
+    history = []
     iterations = int(len(data) / batch_size)
     if len(data) % batch_size != 0:
         iterations = iterations + 1
@@ -574,17 +583,24 @@ def train_generator(generator, data, noise_dim, desired_confidence_dim, epochs, 
         np.random.shuffle(data)
         for i in range(iterations):
             # generate noise as input for the generator
-            noise = randn(noise_dim)
-            desired_confidence = np.random.uniform(0, 1, desired_confidence_dim)
+            noise = randn(batch_size * noise_dim)
+            noise = noise.reshape(batch_size, noise_dim)
+            desired_confidence = np.random.uniform(0, 1, (batch_size, desired_confidence_dim))
             generator_input = [noise, desired_confidence]
-            # todo:create prediction from the fandom forest
-            y_gan = np.ones((batch_size, 1))
+            # create prediction from the random forest
+            generator_samples = generator.predict(generator_input)
+            generator_samples_x = generator_samples[:, :-2]
+            # generator_samples_y = generator_samples[:, -2:-1]
+            y_hat = random_forest.predict_proba(generator_samples_x)
+            confidences = y_hat[:, 1]
             # update the generator via the discriminator's error
-            g_loss = generator.train_on_batch(generator_input, y_gan)
+            g_loss = generator.train_on_batch(generator_input, confidences)
+            history.append(g_loss)
             # if (i+1) % 100 == 0:
             print_progress(iterations, i, 0, g_loss, batch_size, len(data))
         print()
     generator.save_weights(saved_models_path + 'generator_weights.h5')
+    return history
 
 
 def part2(action):
@@ -616,7 +632,7 @@ def part2(action):
     random_forest.fit(x_train, y_train)
     y_pred = random_forest.predict(x_test)
     y_hat = random_forest.predict_proba(x_test)
-    plot_confidence(y_hat, y_test)
+    # plot_confidence(y_hat, y_test)
     y_confidence = np.empty(len(y_pred))
     for i in range(len(y_pred)):
         prediction = int(y_pred[i])
@@ -634,7 +650,13 @@ def part2(action):
     generator = define_generator_for_random_forest(noise_dim, output_shape, desired_confidence_dim)
 
     if action is "train":
-        train_generator(generator)
+        history = train_generator(generator, random_forest, data, noise_dim, desired_confidence_dim,
+                                  epochs=20, batch_size=128)
+        plt.plot(history)
+        plt.title('Model loss')
+        plt.ylabel('Loss')
+        plt.xlabel('Iteration')
+        plt.show()
 
 
 def main():
