@@ -23,6 +23,7 @@ from sklearn import metrics
 
 path_separator = os.path.sep
 saved_models_path = "ass4_data" + path_separator + "models" + path_separator
+random_forest = RandomForestClassifier(n_estimators=100)
 
 
 # implementation of wasserstein loss
@@ -538,7 +539,13 @@ def plot_confidence(y_hat, y_test):
 
 def confidence_loss(y_true, y_pred):
     bce = tf.keras.losses.BinaryCrossentropy()
-    return bce(y_true, y_pred[:, -1])
+    # return bce(y_true, y_pred[:, -1])
+    # return backend.mean(y_true)
+    y_pred_samples = y_pred[:, :-1]
+    y_hat = random_forest.predict_proba(y_pred_samples)
+    y_pred_confidences = y_hat[:, 1]
+    y_pred_confidences = y_pred_confidences.reshape((len(y_pred_confidences), 1))
+    return bce(y_true, y_pred_confidences)
     # return backend.sum(backend.abs(y_true - y_pred[:, -1]))
 
 
@@ -565,22 +572,41 @@ def define_generator_for_random_forest(noise_dim, output_shape, desired_confiden
     x = LeakyReLU(alpha=0.1)(x)
 
     x = Dense(output_shape, activation='sigmoid')(x)
-    x = Concatenate()([x, desired_confidence_input])
-
+    # x = Concatenate()([x, desired_confidence_input])
     model = Model(inputs=[noise_input, desired_confidence_input], outputs=x)
-    model.compile(loss=confidence_loss, optimizer='adam')
+    model.compile(loss='categorical_crossentropy', optimizer='adam')
     return model
 
 
-def train_generator(generator, random_forest, data, noise_dim, desired_confidence_dim, epochs, batch_size):
+def get_sample_from_random_forest(normed_data_x, desired_confidence, y_hat):
+    confidences = y_hat[:, 1]
+    idx = (np.abs(confidences - desired_confidence)).argmin()
+    return normed_data_x[idx], confidences[idx]
+
+
+def get_desired_confidence_samples_by_random_forest(normed_data_x, desired_confidences, generator_samples_y, y_hat):
+    confidences = y_hat[:, 1]
+    desired_confidence_samples = []
+    for i in range(len(desired_confidences)):
+        desired_confidence = desired_confidences[i]
+        idx = (np.abs(confidences - desired_confidence)).argmin()
+        sample = normed_data_x[idx]
+        sample = np.append(sample, generator_samples_y[i])
+        desired_confidence_samples.append(sample)
+    desired_confidence_samples = np.array(desired_confidence_samples)
+    return desired_confidence_samples
+
+
+def train_generator(generator, normed_data, noise_dim, desired_confidence_dim, epochs, batch_size):
     history = []
-    iterations = int(len(data) / batch_size)
-    if len(data) % batch_size != 0:
+    normed_data_x = normed_data[:, :-1]
+    y_hat = random_forest.predict_proba(normed_data_x)
+    iterations = int(len(normed_data) / batch_size)
+    if len(normed_data) % batch_size != 0:
         iterations = iterations + 1
     # manually enumerate epochs
     for epoch in range(epochs):
         print("Epoch (%d/%d)" % (epoch + 1, epochs))
-        np.random.shuffle(data)
         for i in range(iterations):
             # generate noise as input for the generator
             noise = randn(batch_size * noise_dim)
@@ -589,15 +615,14 @@ def train_generator(generator, random_forest, data, noise_dim, desired_confidenc
             generator_input = [noise, desired_confidence]
             # create prediction from the random forest
             generator_samples = generator.predict(generator_input)
-            generator_samples_x = generator_samples[:, :-2]
-            # generator_samples_y = generator_samples[:, -2:-1]
-            y_hat = random_forest.predict_proba(generator_samples_x)
-            confidences = y_hat[:, 1]
-            # update the generator via the discriminator's error
-            g_loss = generator.train_on_batch(generator_input, confidences)
+            generator_samples_x = generator_samples[:, :-1]
+            generator_samples_y = generator_samples[:, -1]
+            y_true = get_desired_confidence_samples_by_random_forest(normed_data_x, desired_confidence,
+                                                                     generator_samples_y, y_hat)
+            # update the generator
+            g_loss = generator.train_on_batch(generator_input, y_true)
             history.append(g_loss)
-            # if (i+1) % 100 == 0:
-            print_progress(iterations, i, 0, g_loss, batch_size, len(data))
+            print_progress(iterations, i, 0, g_loss, batch_size, len(normed_data))
         print()
     generator.save_weights(saved_models_path + 'generator_weights.h5')
     return history
@@ -626,7 +651,7 @@ def part2(action):
     x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.1)  # 90% training and 10% test
 
     # create random forest
-    random_forest = RandomForestClassifier(n_estimators=100)
+    # random_forest = RandomForestClassifier(n_estimators=100)
 
     # train random forest
     random_forest.fit(x_train, y_train)
@@ -649,8 +674,11 @@ def part2(action):
     desired_confidence_dim = 1
     generator = define_generator_for_random_forest(noise_dim, output_shape, desired_confidence_dim)
 
+    # desired_confidence = 0.3
+    # sample, confidence = get_sample_from_random_forest(x, desired_confidence)
+
     if action is "train":
-        history = train_generator(generator, random_forest, data, noise_dim, desired_confidence_dim,
+        history = train_generator(generator, normed_data, noise_dim, desired_confidence_dim,
                                   epochs=20, batch_size=128)
         plt.plot(history)
         plt.title('Model loss')
