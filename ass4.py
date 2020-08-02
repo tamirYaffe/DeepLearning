@@ -560,19 +560,53 @@ def define_generator_for_random_forest(noise_dim, output_shape, desired_confiden
     x = LeakyReLU(alpha=0.1)(x)
     x = Dropout(0.4)(x)
 
-    # x = Concatenate()([x, desired_confidence_input])
+    x = Concatenate()([x, desired_confidence_input])
     x = Dense(64)(x)
     x = BatchNormalization()(x)
     x = LeakyReLU(alpha=0.1)(x)
     x = Dropout(0.5)(x)
 
-    # x = Concatenate()([x, desired_confidence_input])
+    x = Concatenate()([x, desired_confidence_input])
     x = Dense(128)(x)
     x = BatchNormalization()(x)
     x = LeakyReLU(alpha=0.1)(x)
 
     x = Dense(output_shape, activation='sigmoid')(x)
     # x = Concatenate()([x, desired_confidence_input])
+    model = Model(inputs=[noise_input, desired_confidence_input], outputs=x)
+    model.compile(loss='categorical_crossentropy', optimizer='adam')
+    return model
+
+
+def define_generator_for_random_forest2(noise_dim, output_shape, desired_confidence_dim):
+    # Define the tensors for the two input images
+    noise_input = Input(shape=noise_dim)
+    # noise_input = Input(shape=(noise_dim,))
+    desired_confidence_input = Input(shape=(desired_confidence_dim,))
+
+    x = Conv2DTranspose(filters=32, kernel_size=(2, 2))(noise_input)
+    x = BatchNormalization()(x)
+    x = LeakyReLU(alpha=0.2)(x)
+
+    x = Conv2DTranspose(filters=16, kernel_size=(4, 4))(x)
+    x = BatchNormalization()(x)
+    x = LeakyReLU(alpha=0.2)(x)
+
+    x = Conv2DTranspose(filters=8, kernel_size=(8, 8))(x)
+    x = BatchNormalization()(x)
+    x = LeakyReLU(alpha=0.2)(x)
+
+    x = Flatten()(x)
+    x = Dense(output_shape, activation='sigmoid')(x)
+
+    x = Concatenate()([x, desired_confidence_input])
+    x = Dropout(0.5)(x)
+
+    x = Dense(128)(x)
+    x = BatchNormalization()(x)
+    x = LeakyReLU(alpha=0.1)(x)
+
+    x = Dense(output_shape, activation='sigmoid')(x)
     model = Model(inputs=[noise_input, desired_confidence_input], outputs=x)
     model.compile(loss='categorical_crossentropy', optimizer='adam')
     return model
@@ -600,7 +634,7 @@ def get_desired_confidence_samples_by_random_forest(normed_data_x, desired_confi
 def train_generator(generator, normed_data, noise_dim, desired_confidence_dim, epochs, batch_size):
     history = []
     normed_data_x = normed_data[:, :-1]
-    y_hat = random_forest.predict_proba(normed_data_x)
+    # y_hat = random_forest.predict_proba(normed_data_x)
     iterations = int(len(normed_data) / batch_size)
     if len(normed_data) % batch_size != 0:
         iterations = iterations + 1
@@ -609,20 +643,38 @@ def train_generator(generator, normed_data, noise_dim, desired_confidence_dim, e
         print("Epoch (%d/%d)" % (epoch + 1, epochs))
         for i in range(iterations):
             # generate noise as input for the generator
-            noise = randn(batch_size * noise_dim)
-            noise = noise.reshape(batch_size, noise_dim)
-            desired_confidence = np.random.uniform(0, 1, (batch_size, desired_confidence_dim))
-            generator_input = [noise, desired_confidence]
+            # noise = randn(batch_size * noise_dim)
+            # noise = noise.reshape(batch_size, noise_dim)
+            noise = randn(noise_dim[0] * noise_dim[1] * noise_dim[2] * batch_size)
+            noise = noise.reshape((batch_size, noise_dim[0], noise_dim[1], noise_dim[2]))
+            # get batch of real samples(y_true) and get their desired confidence
+            start_idx = i*batch_size
+            remaining_samples = len(normed_data) - start_idx
+            end_idx = start_idx + batch_size
+            if remaining_samples < batch_size:
+                end_idx = start_idx + remaining_samples
+                noise = noise[:remaining_samples]
+            y_true = normed_data_x[start_idx:end_idx]
+            desired_confidence = random_forest.predict_proba(y_true)[:, 1]
+            # desired_confidence = np.random.uniform(0, 1, (batch_size, 1))
+            full_desired_confidence = []
+            for j in range(len(desired_confidence)):
+                full_desired_confidence.append(np.full(desired_confidence_dim, desired_confidence[j]))
+            full_desired_confidence = np.array(full_desired_confidence)
+            # generator_input = [noise, desired_confidence]
+            generator_input = [noise, full_desired_confidence]
             # create prediction from the random forest
             generator_samples = generator.predict(generator_input)
             generator_samples_x = generator_samples[:, :-1]
             generator_samples_y = generator_samples[:, -1]
-            y_true = get_desired_confidence_samples_by_random_forest(normed_data_x, desired_confidence,
-                                                                     generator_samples_y, y_hat)
+            generator_samples_y = np.reshape(generator_samples_y, (len(y_true), 1))
+            # y_true = get_desired_confidence_samples_by_random_forest(normed_data_x, desired_confidence,
+            #                                                          generator_samples_y, y_hat)
+            y_true = np.hstack((y_true, generator_samples_y))
             # update the generator
             g_loss = generator.train_on_batch(generator_input, y_true)
             history.append(g_loss)
-            print_progress(iterations, i, 0, g_loss, batch_size, len(normed_data))
+            print_progress(iterations, i+1, 0, g_loss, batch_size, len(normed_data))
         print()
     generator.save_weights(saved_models_path + 'generator_weights.h5')
     return history
@@ -630,8 +682,8 @@ def train_generator(generator, normed_data, noise_dim, desired_confidence_dim, e
 
 def part2(action):
     # Read the data.
-    database = 'adult.arff'
-    # database = 'bank-full.arff'
+    # database = 'adult.arff'
+    database = 'bank-full.arff'
     data_path = 'ass4_data' + path_separator + database
     data, meta = arff.loadarff(data_path)
 
@@ -669,17 +721,19 @@ def part2(action):
     print("Accuracy:", metrics.accuracy_score(y_test, y_pred))
     print("min_confidence: %f, max_confidence: %f, mean_confidence: %f" % (min_confidence, max_confidence,
                                                                            mean_confidence))
-    noise_dim = 100
+    # noise_dim = 100
+    noise_dim = (10, 10, 1)
     output_shape = len(normed_data[0])
-    desired_confidence_dim = 1
-    generator = define_generator_for_random_forest(noise_dim, output_shape, desired_confidence_dim)
+    # desired_confidence_dim = 1
+    desired_confidence_dim = output_shape
+    generator = define_generator_for_random_forest2(noise_dim, output_shape, desired_confidence_dim)
 
     # desired_confidence = 0.3
     # sample, confidence = get_sample_from_random_forest(x, desired_confidence)
 
     if action is "train":
         history = train_generator(generator, normed_data, noise_dim, desired_confidence_dim,
-                                  epochs=20, batch_size=128)
+                                  epochs=10, batch_size=128)
         plt.plot(history)
         plt.title('Model loss')
         plt.ylabel('Loss')
