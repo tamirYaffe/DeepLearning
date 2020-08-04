@@ -528,9 +528,9 @@ def part1(action):
             csvWriter.writerows(samples_data)
 
 
-def plot_confidence(y_hat, y_test):
-    idx_spam = np.where(y_test == 1)[0]
-    idx_ham = np.where(y_test == 0)[0]
+def plot_confidence(y_hat):
+    # idx_spam = np.where(y_test == 1)[0]
+    # idx_ham = np.where(y_test == 0)[0]
     plt.hist(y_hat[:, 1], histtype='step', label='class 1')
     # plt.hist(y_hat[idx_spam, 1], histtype='step', label='class 1')
     # plt.hist(y_hat[idx_ham, 1], histtype='step', label='class 0')
@@ -747,6 +747,69 @@ def train_generator(generator, normed_data, noise_dim, desired_confidence_dim, r
     return history
 
 
+def eval_random_forest(random_forest):
+    with open(saved_models_path + test_file_name, 'rb') as f:
+        x_test, y_test = pickle.load(f)
+    y_pred = random_forest.predict(x_test)
+    y_hat = random_forest.predict_proba(x_test)
+    plot_confidence(y_hat)
+    y_confidence = np.empty(len(y_pred))
+    for i in range(len(y_pred)):
+        prediction = int(y_pred[i])
+        confidence = y_hat[i][prediction]
+        y_confidence[i] = confidence
+    y_confidence = y_hat[:, 1]
+    min_confidence = y_confidence.min(0)
+    max_confidence = y_confidence.max(0)
+    mean_confidence = y_confidence.mean(0)
+    print("Accuracy:", metrics.accuracy_score(y_test, y_pred))
+    print("min_confidence: %f, max_confidence: %f, mean_confidence: %f" % (min_confidence, max_confidence,
+                                                                           mean_confidence))
+
+
+def eval_generator(generator, random_forest, noise_dim, generated_size):
+    noise = randn(noise_dim * generated_size)
+    noise = noise.reshape((generated_size, noise_dim))
+    desired_confidence = np.random.uniform(0, 1, (generated_size, 1))
+    desired_confidence = np.sort(desired_confidence, axis=0)
+
+    # generate samples
+    generator_input = [noise, desired_confidence]
+    generator_samples = generator.predict(generator_input)
+    generator_samples_x = generator_samples[:, :-1]
+
+    # eval samples
+    y_hat = random_forest.predict_proba(generator_samples_x)
+    plot_confidence(y_hat)
+
+    random_forest_confidence = y_hat[:, 1]
+    random_forest_confidence = np.reshape(random_forest_confidence, generated_size)
+    desired_confidence = np.reshape(desired_confidence, generated_size)
+    difference_confidence = np.abs(desired_confidence - random_forest_confidence)
+
+    bucket_difference_confidence = []
+    bucket_max = 0.1
+    difference_sum = 0
+    difference_count = 0
+    for i in range(len(desired_confidence)):
+        if desired_confidence[i] < bucket_max:
+            difference_count += 1
+            difference_sum += difference_confidence[i]
+        else:
+            bucket_difference_confidence.append(difference_sum/difference_count)
+            bucket_max += 0.1
+            difference_count = 1
+            difference_sum = difference_confidence[i]
+    bucket_difference_confidence.append(difference_sum / difference_count)
+
+    plt.plot(bucket_difference_confidence)
+    plt.title('average difference per confidence buckets')
+    plt.ylabel('absolute difference')
+    plt.xlabel('confidence input')
+    plt.xticks(np.arange(0, 10), labels=['0.1', '0.2', '0.3', '0.4', '0.5', '0.6', '0.7', '0.8', '0.9', '1'])
+    plt.show()
+
+
 def part2(action):
     # Read the data.
     database = 'adult.arff'
@@ -802,24 +865,11 @@ def part2(action):
 
     if action is "eval":
         # load test data
-        with open(saved_models_path + test_file_name, 'rb') as f:
-            x_test, y_test = pickle.load(f)
         random_forest = pickle.load(open(saved_models_path + random_forest_filename, 'rb'))
-        y_pred = random_forest.predict(x_test)
-        y_hat = random_forest.predict_proba(x_test)
-        plot_confidence(y_hat, y_test)
-        y_confidence = np.empty(len(y_pred))
-        for i in range(len(y_pred)):
-            prediction = int(y_pred[i])
-            confidence = y_hat[i][prediction]
-            y_confidence[i] = confidence
-        y_confidence = y_hat[:, 1]
-        min_confidence = y_confidence.min(0)
-        max_confidence = y_confidence.max(0)
-        mean_confidence = y_confidence.mean(0)
-        print("Accuracy:", metrics.accuracy_score(y_test, y_pred))
-        print("min_confidence: %f, max_confidence: %f, mean_confidence: %f" % (min_confidence, max_confidence,
-                                                                               mean_confidence))
+        generator.load_weights(saved_models_path + 'generator_weights.h5')
+
+        eval_random_forest(random_forest)
+        eval_generator(generator, random_forest, noise_dim=100, generated_size=1000)
 
 
 def main():
