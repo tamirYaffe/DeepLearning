@@ -1,4 +1,5 @@
 import os
+import pickle
 import sys
 import time
 from keras import Input, Model
@@ -22,7 +23,9 @@ from sklearn import metrics
 
 path_separator = os.path.sep
 saved_models_path = "ass4_data" + path_separator + "models" + path_separator
-random_forest = RandomForestClassifier(n_estimators=100)
+# random_forest = RandomForestClassifier(n_estimators=100)
+random_forest_filename = 'random_forest_model'
+test_file_name = 'train_test'
 
 
 # implementation of wasserstein loss
@@ -537,7 +540,7 @@ def plot_confidence(y_hat, y_test):
     plt.show()
 
 
-def confidence_loss(y_true, y_pred):
+def confidence_loss(random_forest, y_true, y_pred):
     bce = tf.keras.losses.BinaryCrossentropy()
     # return bce(y_true, y_pred[:, -1])
     # return backend.mean(y_true)
@@ -658,7 +661,7 @@ def get_desired_confidence_samples_by_random_forest(normed_data_x, desired_confi
 
 
 def training_step(batch_size, desired_confidence_dim, generator, history, i, iterations, noise_dim, normed_data,
-                  normed_data_x):
+                  normed_data_x, random_forest):
     # generate noise as input for the generator
     # noise = randn(batch_size * noise_dim)
     # noise = noise.reshape(batch_size, noise_dim)
@@ -695,7 +698,7 @@ def training_step(batch_size, desired_confidence_dim, generator, history, i, ite
     print_progress(iterations, i + 1, 0, g_loss, batch_size, len(normed_data))
 
 
-def training_step2(batch_size, generator, history, i, iterations, noise_dim, normed_data):
+def training_step2(batch_size, generator, history, i, iterations, noise_dim, normed_data, random_forest):
     noise = randn(noise_dim[0] * noise_dim[1] * noise_dim[2] * batch_size)
     noise = noise.reshape((batch_size, noise_dim[0] * noise_dim[1] * noise_dim[2]))
     start_idx = i * batch_size
@@ -726,7 +729,7 @@ def training_step2(batch_size, generator, history, i, iterations, noise_dim, nor
     print_progress(iterations, i + 1, 0, g_loss, batch_size, len(normed_data))
 
 
-def train_generator(generator, normed_data, noise_dim, desired_confidence_dim, epochs, batch_size):
+def train_generator(generator, normed_data, noise_dim, desired_confidence_dim, random_forest, epochs, batch_size):
     history = []
     normed_data_x = normed_data[:, :-1]
     # y_hat = random_forest.predict_proba(normed_data_x)
@@ -737,7 +740,7 @@ def train_generator(generator, normed_data, noise_dim, desired_confidence_dim, e
     for epoch in range(epochs):
         print("Epoch (%d/%d)" % (epoch + 1, epochs))
         for i in range(iterations):
-            training_step(batch_size, desired_confidence_dim, generator, history, i, iterations, noise_dim, normed_data, normed_data_x)
+            training_step(batch_size, desired_confidence_dim, generator, history, i, iterations, noise_dim, normed_data, normed_data_x, random_forest)
             # training_step2(batch_size, generator, history, i, iterations, noise_dim, normed_data)
         print()
     generator.save_weights(saved_models_path + 'generator_weights.h5')
@@ -763,29 +766,6 @@ def part2(action):
     x = normed_data[:, :-1]
     y = normed_data[:, -1]
 
-    # Split dataset into training set and test set
-    x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.1)  # 90% training and 10% test
-
-    # create random forest
-    # random_forest = RandomForestClassifier(n_estimators=100)
-
-    # train random forest
-    random_forest.fit(x_train, y_train)
-    y_pred = random_forest.predict(x_test)
-    y_hat = random_forest.predict_proba(x_test)
-    # plot_confidence(y_hat, y_test)
-    y_confidence = np.empty(len(y_pred))
-    for i in range(len(y_pred)):
-        prediction = int(y_pred[i])
-        confidence = y_hat[i][prediction]
-        y_confidence[i] = confidence
-    y_confidence = y_hat[:, 1]
-    min_confidence = y_confidence.min(0)
-    max_confidence = y_confidence.max(0)
-    mean_confidence = y_confidence.mean(0)
-    print("Accuracy:", metrics.accuracy_score(y_test, y_pred))
-    print("min_confidence: %f, max_confidence: %f, mean_confidence: %f" % (min_confidence, max_confidence,
-                                                                           mean_confidence))
     # noise_dim = 100
     noise_dim = (10, 10, 1)
     output_shape = len(normed_data[0])
@@ -802,7 +782,17 @@ def part2(action):
     # sample, confidence = get_sample_from_random_forest(x, desired_confidence)
 
     if action is "train":
-        history = train_generator(generator, normed_data, noise_dim, desired_confidence_dim,
+        # Split dataset into training set and test set
+        x_train, x_test, y_train, y_test = train_test_split(x, y, test_size=0.1)  # 90% training and 10% test
+        # save test data
+        with open(saved_models_path + test_file_name, 'wb') as f:
+            pickle.dump([x_test, y_test], f)
+        # train random forest
+        random_forest = RandomForestClassifier(n_estimators=100)
+        random_forest.fit(x_train, y_train)
+        # save the model to disk
+        pickle.dump(random_forest, open(saved_models_path + random_forest_filename, 'wb'))
+        history = train_generator(generator, normed_data, noise_dim, desired_confidence_dim, random_forest,
                                   epochs=5, batch_size=128)
         plt.plot(history)
         plt.title('Model loss')
@@ -810,12 +800,34 @@ def part2(action):
         plt.xlabel('Iteration')
         plt.show()
 
+    if action is "eval":
+        # load test data
+        with open(saved_models_path + test_file_name, 'rb') as f:
+            x_test, y_test = pickle.load(f)
+        random_forest = pickle.load(open(saved_models_path + random_forest_filename, 'rb'))
+        y_pred = random_forest.predict(x_test)
+        y_hat = random_forest.predict_proba(x_test)
+        plot_confidence(y_hat, y_test)
+        y_confidence = np.empty(len(y_pred))
+        for i in range(len(y_pred)):
+            prediction = int(y_pred[i])
+            confidence = y_hat[i][prediction]
+            y_confidence[i] = confidence
+        y_confidence = y_hat[:, 1]
+        min_confidence = y_confidence.min(0)
+        max_confidence = y_confidence.max(0)
+        mean_confidence = y_confidence.mean(0)
+        print("Accuracy:", metrics.accuracy_score(y_test, y_pred))
+        print("min_confidence: %f, max_confidence: %f, mean_confidence: %f" % (min_confidence, max_confidence,
+                                                                               mean_confidence))
+
 
 def main():
     # part1(action="train")
     # part1(action="eval")
 
-    part2(action="train")
+    # part2(action="train")
+    part2(action="eval")
 
 
 if __name__ == '__main__':
